@@ -1,0 +1,34 @@
+--- Makefile.old	2016-10-03 15:16:21.000000000 +1000
++++ Makefile	2016-11-20 02:31:33.055041295 +1000
+@@ -10,12 +10,15 @@
+ 
+ # macros --------------------------------------------------------------------
+ 
++PREFIX ?= /usr
++LIBDIR ?= /usr/lib
++
+ # uncomment these 2 lines only if you are using an external copy of libpng:
+-PNGINC = /usr/local/include
+-PNGLIB = /usr/local/lib
++PNGINC ?= $(PREFIX)/include
++PNGLIB ?= $(LIBDIR)
+ # uncomment these 2 lines only if you are using an external copy of zlib:
+-ZINC = /usr/local/include
+-ZLIB = /usr/local/lib
++ZINC = $(PREFIX)/include
++ZLIB = $(LIBDIR)
+ 
+ CC = gcc
+ LD = gcc
+@@ -23,9 +26,9 @@
+ 
+ CPPFLAGS = -I $(PNGINC)
+ 
+-CFLAGS = -g -O3 -fomit-frame-pointer -Wall
++CFLAGS += -O3 -fomit-frame-pointer -Wall
+ # [note that -Wall is a gcc-specific compilation flag ("all warnings on")]
+-LDFLAGS =
++LDFLAGS +=
+ O = .o
+ E =
+ 

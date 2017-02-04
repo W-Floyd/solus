@@ -1,0 +1,20 @@
+name       : packmp3
+version    : 1.0g
+release    : 1
+source     :
+    - http://packjpg.encode.ru/wp-content/uploads/packMP3-v1.0g.zip : b73b380d614ab5a9085c256e6e0dc61863a959998887471b6f8bd20f23ab8786
+license    : LGPL-3.0
+component  : multimedia.audio
+summary    : packMP3 is a compression program for MP3 files.
+description: |
+    packMP3 is a compression program specially designed for further compression of MPEG-1 Audio Layer III audio files without causing any further loss. Typically it reduces the file size of a MP3 file by 16% based on tests with 6000 randomly selected files.
+setup      : |
+    %patch -p0 < $pkgfiles/makefile.patch
+build      : |
+    pushd source
+    %make
+    popd
+install    : |
+    pushd source
+    install -Dm00755 packMP3 $installdir/usr/bin/packMP3
+    popd

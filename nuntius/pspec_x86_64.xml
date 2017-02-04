@@ -1,0 +1,49 @@
+<PISI>
+    <Source>
+        <Name>nuntius</Name>
+        <Packager>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Packager>
+        <License>GPL-2.0</License>
+        <PartOf>desktop</PartOf>
+        <Summary xml:lang="en">Nuntius delivers notifications from your phone or tablet to your computer over Bluetooth.</Summary>
+        <Description xml:lang="en">Nuntius delivers notifications from your phone or tablet to your computer over Bluetooth.
+
+To use Nuntius you will need to install a companion tool on your phone or tablet and pair it via Bluetooth.
+</Description>
+        <Archive type="binary" sha1sum="79eb0752a961b8e0d15c77d298c97498fbc89c5a">https://solus-project.com/sources/README.Solus</Archive>
+    </Source>
+    <Package>
+        <Name>nuntius</Name>
+        <Summary xml:lang="en">Nuntius delivers notifications from your phone or tablet to your computer over Bluetooth.</Summary>
+        <Description xml:lang="en">Nuntius delivers notifications from your phone or tablet to your computer over Bluetooth.
+
+To use Nuntius you will need to install a companion tool on your phone or tablet and pair it via Bluetooth.
+</Description>
+        <PartOf>desktop</PartOf>
+        <Files>
+            <Path fileType="config">/etc/xdg/autostart/org.holylobster.nuntius.desktop</Path>
+            <Path fileType="executable">/usr/bin</Path>
+            <Path fileType="data">/usr/share/appdata/org.holylobster.nuntius.appdata.xml</Path>
+            <Path fileType="data">/usr/share/applications/org.holylobster.nuntius.desktop</Path>
+            <Path fileType="data">/usr/share/dbus-1/services/org.holylobster.nuntius.service</Path>
+            <Path fileType="data">/usr/share/icons/hicolor/16x16/apps/nuntius.png</Path>
+            <Path fileType="data">/usr/share/icons/hicolor/22x22/apps/nuntius.png</Path>
+            <Path fileType="data">/usr/share/icons/hicolor/24x24/apps/nuntius.png</Path>
+            <Path fileType="data">/usr/share/icons/hicolor/256x256/apps/nuntius.png</Path>
+            <Path fileType="data">/usr/share/icons/hicolor/32x32/apps/nuntius.png</Path>
+            <Path fileType="data">/usr/share/icons/hicolor/48x48/apps/nuntius.png</Path>
+            <Path fileType="localedata">/usr/share/locale</Path>
+        </Files>
+    </Package>
+    <History>
+        <Update release="1">
+            <Date>2016-12-30</Date>
+            <Version>0.2.0</Version>
+            <Comment>Packaging update</Comment>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Update>
+    </History>
+</PISI>

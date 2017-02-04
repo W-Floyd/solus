@@ -1,0 +1,22 @@
+name       : dpf-plugins
+version    : 1.0
+release    : 1
+source     :
+    - https://github.com/DISTRHO/DPF-Plugins/archive/v1.0.tar.gz : b4bb999cba9b464228f8710f430d01350333bb866041cdc40ceed67aa13936bc
+license    : GPL-3.0
+component  : multimedia.audio
+summary    : Collection of DPF-based plugins.
+description: |
+    The list of plugins/packs are:
+
+    glBars
+    Kars
+    Mini-Series (3BandEQ. 3BandSplitter, PingPongPan)
+    ndc-Plugs (Amplitude Imposer, Cycle Shifter, Soul Force)
+    MVerb
+    Nekobi
+    ProM
+build      : |
+    %make PREFIX=/usr
+install    : |
+    %make_install PREFIX=/usr

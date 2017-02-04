@@ -1,0 +1,18 @@
+name       : pngcrush
+version    : 1.8.10
+release    : 1
+source     :
+    - http://downloads.sourceforge.net/project/pmt/pngcrush/1.8.10/pngcrush-1.8.10-nolib.tar.xz : 8db04792f8912011c9c25caf732894276f16ff0b7612f3365d18971dfb56442b
+license    : Libpng # Modified
+component  : system.utils
+summary    : Tool for optimizing the compression of PNG files.
+description: |
+    pngcrush is a free and open source command-line utility for optimizing PNG image files. It reduces the size of the file losslessly – that is, the resulting "crushed" image will have the same quality as the source image.
+builddeps  :
+    - pkgconfig(libpng)
+setup      : |
+    %patch -p0 < $pkgfiles/makefile.patch
+build      : |
+    %make
+install    : |
+    %make_install

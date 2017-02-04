@@ -1,0 +1,76 @@
+--- Makefile.old	2004-02-14 09:19:51.000000000 +1000
++++ Makefile	2016-11-18 22:48:12.698567995 +1000
+@@ -1,4 +1,4 @@
+-# Makefile for libzd 
++# Makefile for libzd
+ # Original zlib Makefile file, modified to match libzd.
+ # Dimitre Trendafilov (2003)
+ 
+@@ -12,17 +12,17 @@
+ # make test
+ #
+ # To compile the command line delta compressor, type:
+-# make zdc 
++# make zdc
+ #
+ # To compile the command line delta decompressor, type:
+-# make zdu 
++# make zdu
+ #
+ # For multiple reference file support compile with REFNUM=N option
+ # where N is the desired number (1..4) of referemce files. The default
+-# value is 1. 
++# value is 1.
+ # NOTE: The number of reference files comes at a price! Based on
+-# the selected number of reference files the compression may degrade, 
+-# and/or the memory usage may be increase. Do NOT add support for more 
++# the selected number of reference files the compression may degrade,
++# and/or the memory usage may be increase. Do NOT add support for more
+ # reference files than you need!!!
+ #
+ # To suppress the zdelta header and checksum compile with -DNO_ERROR_CHECK
+@@ -53,6 +53,7 @@
+ exec_prefix = ${prefix}
+ libdir = ${exec_prefix}/lib
+ includedir = ${prefix}/include
++bindir = ${prefix}/bin
+ 
+ OBJS	= adler32.o deflate.o  infblock.o infcodes.o inffast.o \
+           inflate.o inftrees.o infutil.o zd_mem.o trees.o zdelta.o zutil.o
+@@ -80,7 +81,7 @@
+ libzd: libzd.a
+ 
+ libzd.a: $(OBJS) $(OBJA)
+-	$(AR) $@ $(OBJS) 
++	$(AR) $@ $(OBJS)
+ 	-@ ($(RANLIB) $@ || true) >/dev/null 2>&1
+ 
+ $(SHAREDLIB).$(VER): $(OBJS)
+@@ -101,13 +102,16 @@
+ 	$(CC) $(CFLAGS) -o $@ _zdu.o $(LIBS)
+ 
+ install: $(LIBS)
+-	-@if [ ! -d $(includedir)  ]; then mkdir $(includedir); fi
+-	-@if [ ! -d $(libdir) ]; then mkdir $(libdir); fi
++	-@if [ ! -d $(includedir)  ]; then mkdir -p $(includedir); fi
++	-@if [ ! -d $(libdir) ]; then mkdir -p $(libdir); fi
++	-@if [ ! -d $(bindir) ]; then mkdir -p $(bindir); fi
+ 	cp zdlib.h $(includedir)
+ 	cp zdconf.h $(includedir)
+ 	chmod 644 $(includedir)/zdlib.h
+ 	chmod 644 $(includedir)/zdconf.h
+ 	cp $(LIBS) $(libdir)
++	install -Dm00755 zdu $(bindir)/zdu
++	install -Dm00755 zdc $(bindir)/zdc
+ 	cd $(libdir); chmod 755 $(LIBS)
+ 	-@(cd $(libdir); $(RANLIB) libzd.a || true) >/dev/null 2>&1
+ 	cd $(libdir); if test -f $(SHAREDLIB).$(VER); then \
+@@ -156,7 +160,7 @@
+ #	if test ! -d $$d; then rm -f $$d; fi
+ #	mv Makefile~ Makefile
+ 
+-tags:	
++tags:
+ 	etags *.[ch]
+ 
+ depend:

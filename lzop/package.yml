@@ -1,0 +1,19 @@
+name       : lzop
+version    : 1.03
+release    : 1
+source     :
+    - https://www.lzop.org/download/lzop-1.03.tar.gz : c1425b8c77d49f5a679d5a126c90ea6ad99585a55e335a613cae59e909dbb2c9
+license    : GPL-2.0
+component  : system.utils
+summary    : lzop is a file compressor very similar to gzip. lzop favors speed over compression ratio.
+description: |
+    lzop is a file compressor which is very similar to gzip. lzop uses the LZO data compression library for compression services, and its main advantages over gzip are much higher compression and decompression speed (at the cost of some compression ratio).
+builddeps  :
+    - lzo-devel
+setup      : |
+    %patch -p1 <$pkgfiles/lzop-1.03-gcc6.patch
+    %configure
+build      : |
+    %make
+install    : |
+    %make_install

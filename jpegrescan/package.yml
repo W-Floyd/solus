@@ -1,0 +1,15 @@
+name       : jpegrescan
+version    : 1.1.0
+release    : 1
+source     :
+    - https://github.com/kud/jpegrescan/archive/1.1.0.tar.gz : a8522e971d11c904f4b61af665c3be800f26404e2b14f5f80c675b4a72a42b32
+license    : Public Domain
+component  : multimedia.graphics
+summary    : JPEGrescan is a perl script that uses jpeg tools to optimise jpeg compression.
+description: |
+    JPEGrescan is a perl script that uses jpeg tools to optimise jpeg compression by micro-managing some of the compression math based on research into some of the most common parameters.
+rundeps    :
+    - libjpeg-turbo-devel
+    - perl-file-slurp
+install    : |
+    install -Dm00755 jpegrescan $installdir/usr/bin/jpegrescan

@@ -1,0 +1,17 @@
+name       : python-zeroconf
+version    : 0.17.6
+release    : 1
+source     :
+    - https://github.com/jstasiak/python-zeroconf/archive/0.17.6.tar.gz : 11fa4adb2100a1dc2bd0ce390b060334b3b5d886701edb754f7bf938d82d8118
+license    : LGPL-2.1
+component  : programming.python
+summary    : Multicast DNS Service Discovery for Python
+description: |
+    This is fork of pyzeroconf, Multicast DNS Service Discovery for Python, originally by Paul Scott-Murphy, modified by William McBrine.
+rundeps    :
+    - python-netifaces
+    - python-six
+setup      : |
+    %python3_setup
+install    : |
+    %python3_install

@@ -1,0 +1,17 @@
+name       : getxbook
+version    : 1.2
+release    : 1
+source     :
+    - https://njw.me.uk/getxbook/getxbook-1.2.tar.xz : 7a4b1636ecb6dace814b818d9ff6a68167799b81ac6fc4dca1485efd48cf1c46
+license    : ISC
+component  : office.viewers
+summary    : getxbook is a collection of tools to download books from Google Books, Amazon and Barnes & Noble.
+description: |
+    getxbook is a collection of tools to download books from Google Books' "Book Preview" (getgbook), Amazon's "Look Inside the Book" (getabook) and Barnes & Noble's "Book Viewer" (getbnbook).
+rundeps    :
+    - tcl
+    - tk
+build      : |
+    %make PREFIX=/usr
+install    : |
+    %make_install PREFIX=/usr

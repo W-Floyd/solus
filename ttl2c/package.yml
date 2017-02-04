@@ -1,0 +1,19 @@
+name       : ttl2c
+version    : 1.0.0
+release    : 1
+source     :
+    - https://github.com/lvtk/ttl2c/archive/1.0.0.tar.gz : 8448071a3094602224765a076c15b13a1ee2c2fce0f58813c1e4720eb4dce5be
+license    : GPL-3.0
+component  : multimedia.library
+summary    : Turtle to header conversion utility for LV2 Plugin developers.
+description: |
+    Turtle to header conversion utility for LV2 Plugin developers
+builddeps  :
+    - libboost-devel
+setup      : |
+    %patch -p0 < $pkgfiles/workaround.patch
+    %waf_configure
+build      : |
+    %waf_build
+install    : |
+    %waf_install

@@ -1,0 +1,1928 @@
+diff -Naur -U 10 zdelta-2.1/blocks/zdelta+blocks.c zdelta-master/blocks/zdelta+blocks.c
+--- zdelta-2.1/blocks/zdelta+blocks.c	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/blocks/zdelta+blocks.c	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,164 @@
++//
++//  zdelta+blocks.c
++//  zdelta
++//
++//  Created by Jens Alfke on 10/27/13.
++//
++
++#include "zdelta+blocks.h"
++#include "zd_mem.h"     /* provides dynamic memory allocation */
++#include "zutil.h"
++
++// Expected delta compression ratio; copied from zdelta.c
++#define EXPECTED_RATIO 4
++
++// Maximum amount of memory to use for delta output buffer
++#define DBUF_MAX_SIZE (32*1024)
++
++static int call_writer(Bytef* buf, Bytef* next_out, zd_writer_block writer) {
++  uLongf size = next_out - buf;
++  if (size == 0) {
++    return ZD_OK;
++  }
++  return writer(buf, size);
++}
++
++int ZEXPORT zd_compress_incr(const Bytef *ref, uLong rsize,
++                             const Bytef *tar, uLong tsize,
++                             zd_writer_block delta_writer)
++{
++  int rval;
++  zd_stream strm;
++  zd_mem_buffer dbuf;
++
++  /* init io buffers */
++  strm.base[0]  = (Bytef*) ref;
++  strm.base_avail[0] = rsize;
++  strm.base_out[0] = 0;
++  strm.refnum      = 1;
++
++  strm.next_in  = (Bytef*) tar;
++  strm.total_in = 0;
++  strm.avail_in = (uInt)tsize;
++
++  /* allocate the output buffer */
++  uLong dbuf_size = tsize/EXPECTED_RATIO + 64;
++  if (dbuf_size > DBUF_MAX_SIZE) {
++    dbuf_size = DBUF_MAX_SIZE;
++  }
++  if (zd_alloc(&dbuf, dbuf_size) == 0) {
++    return ZD_MEM_ERROR;
++  }
++  
++  strm.next_out  = dbuf.pos;
++  strm.total_out = 0;
++  strm.avail_out = (uInt)dbuf.size;
++
++  strm.zalloc = (alloc_func)0;
++  strm.zfree = (free_func)0;
++  strm.opaque = (voidpf)0;
++
++  /* init huffman coder */
++  rval = zd_deflateInit(&strm, ZD_DEFAULT_COMPRESSION);
++  if (rval != ZD_OK) {
++    fprintf(stderr, "%s error: %d\n", "deflateInit", rval);
++    zd_free(&dbuf);
++    return rval;
++  }
++
++  /* compress the data */
++  while((rval = zd_deflate(&strm,ZD_FINISH)) == ZD_OK || rval == ZD_STREAM_END){
++    /* call the writer block with the data written to the output buffer */
++    int wval = call_writer(dbuf.buffer, strm.next_out, delta_writer);
++    if (wval != ZD_OK) {
++      rval = wval;
++      break;
++    }
++    if (rval == ZD_STREAM_END) {
++      rval = ZD_OK;
++      break;
++    }
++
++    /* reset the output buffer */
++    strm.next_out = dbuf.buffer;
++    strm.avail_out = (uInt)dbuf.size;
++  }
++
++  zd_free(&dbuf);
++
++  if(rval != ZD_OK){
++    fprintf(stderr, "%s error: %d\n", "deflate", rval);
++    zd_deflateEnd(&strm);
++    return rval;
++  }
++  return zd_deflateEnd(&strm);
++}
++
++
++int ZEXPORT zd_uncompress_incr(const Bytef *ref, uLong rsize,
++                               zd_writer_block target_writer,
++                               const Bytef *delta, uLong dsize)
++{
++  int rval;
++  int f = ZD_SYNC_FLUSH;
++  zd_mem_buffer tbuf;  
++  zd_stream strm;
++
++  /* init io buffers */
++  strm.base[0]       = (Bytef*) ref;
++  strm.base_avail[0] = rsize;
++  strm.refnum        = 1;
++
++  /* allocate target buffer */
++  uLong dbuf_size = rsize + EXPECTED_RATIO*dsize;
++  if (dbuf_size > DBUF_MAX_SIZE) {
++    dbuf_size = DBUF_MAX_SIZE;
++  }
++  if (zd_alloc(&tbuf, dbuf_size) == 0) {
++    return ZD_MEM_ERROR;
++  }
++  strm.avail_out = (uInt)tbuf.size;
++  strm.next_out  = tbuf.buffer;
++  strm.total_out = 0;
++
++  strm.avail_in = (uInt)dsize;
++  strm.next_in  = (Bytef*) delta;
++  strm.total_in = 0;
++
++  strm.zalloc = (alloc_func)0;
++  strm.zfree  = (free_func)0;
++  strm.opaque = (voidpf)0;
++  rval = zd_inflateInit(&strm);
++  if (rval != ZD_OK) {
++    fprintf(stderr, "%s error: %d\n", "zd_InflateInit", rval);
++    zd_free(&tbuf);
++    return rval;
++  }
++
++  while((rval = zd_inflate(&strm,f)) == ZD_OK || rval == ZD_STREAM_END){
++    /* call the writer block with the data written to the output buffer */
++    int wval = call_writer(tbuf.buffer, strm.next_out, target_writer);
++    if (wval != ZD_OK) {
++      rval = wval;
++      break;
++    }
++    if (rval == ZD_STREAM_END) {
++      rval = ZD_OK;
++      break;
++    }
++
++    /* restore zstream internal pointer */
++    strm.next_out = tbuf.buffer;
++    strm.avail_out = (uInt)tbuf.size;
++  }
++
++  zd_free(&tbuf);
++
++  if(rval != ZD_OK){
++    if(strm.msg!=NULL) fprintf(stderr,"%s\n",strm.msg);
++    zd_inflateEnd(&strm);
++    return rval;
++  }
++
++  return zd_inflateEnd(&strm);
++}
+diff -Naur -U 10 zdelta-2.1/blocks/zdelta+blocks.h zdelta-master/blocks/zdelta+blocks.h
+--- zdelta-2.1/blocks/zdelta+blocks.h	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/blocks/zdelta+blocks.h	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,28 @@
++//
++//  zdelta+blocks.h
++//  zdelta
++//
++//  Created by Jens Alfke on 10/27/13.
++//
++
++#ifndef zdelta_zdelta_blocks_h
++#define zdelta_zdelta_blocks_h
++
++#include "zdlib.h"
++
++/* zdelta convenience API for use with Clang or other C compilers that support blocks. */
++
++/*  Callback that gives chunks of output to the caller.
++    A return value other than ZD_OK will stop the compress/uncompress operation and return the
++    same error value from the function. */
++typedef int (^zd_writer_block)(const Bytef* piece, uLongf size);
++
++int ZEXPORT zd_compress_incr(const Bytef *ref, uLong rsize,
++                             const Bytef *tar, uLong tsize,
++                             zd_writer_block delta_writer);
++
++int ZEXPORT zd_uncompress_incr(const Bytef *ref, uLong rsize,
++                               zd_writer_block target_writer,
++                               const Bytef *delta, uLong dsize);
++
++#endif
+diff -Naur -U 10 zdelta-2.1/Cocoa/NSData+zdelta.h zdelta-master/Cocoa/NSData+zdelta.h
+--- zdelta-2.1/Cocoa/NSData+zdelta.h	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/Cocoa/NSData+zdelta.h	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,57 @@
++//
++//  NSData+zdelta.h
++//  zdelta
++//
++//  Created by Jens Alfke on 10/27/13.
++//
++
++#import <Foundation/Foundation.h>
++
++/** Output block for writing delta or target data. Return NO to stop the process. */
++typedef BOOL (^ZDeltaOutputBlock)(const void* bytes, size_t length);
++
++
++@interface NSData (zdelta)
++
++/** Generates a data blob (the "delta") that encapsulates the changes from the source data (the
++    receiver) to the target data.
++    Subsequently, applying the delta to an NSData equal to self will result in an NSData equal to
++    the target data.
++    The delta will ordinarily be significantly smaller than the targetData (that's the purpose of
++    delta encoding) but in the worst case may be slightly larger. */
++- (NSData*) zd_deltaTo: (NSData*)targetData;
++
++/** Incremental delta generator. As the delta data is produced, the `onOutput` block is called
++    with the bytes, which the caller is responsible for concatenating. */
++- (BOOL) zd_deltaTo: (NSData*)targetData
++           onOutput: (ZDeltaOutputBlock)outputBlock;
++
++
++/** Applies a delta to source data (self), returning the target data. */
++- (NSData*) zd_applyDelta: (NSData*)delta;
++
++/** Incremental delta applicator. As the target data is produced, the `onOutput` block is called
++    with the bytes, which the caller is responsible for concatenating. */
++- (BOOL) zd_applyDelta: (NSData*)delta
++              onOutput: (ZDeltaOutputBlock)outputBlock;
++
++/** File-based delta applicator. Applies in-memory delta to a source file producing a target file.
++    This memory-maps the source file and streams the target file, so it's useable even with very
++    large files as long as there's enough free address space to map the source.
++    If the target file already exists, it will be overwritten.
++    If the operation fails, the target file will be deleted. */
+++ (BOOL) zd_applyDelta: (NSData*)delta
++                toFile: (NSURL*)sourceFileURL
++         producingFile: (NSURL*)targetFileURL
++                 error: (NSError**)outError;
++
++/** Computes the 32-bit Adler checksum of the data. According to the zlib documentation,
++    "An Adler-32 checksum is almost as reliable as a CRC32 but can be computed much faster."
++    It's also much faster (and much smaller) than a SHA digest; but it's not safe against deliberate
++    collision attacks, so it should never be used for security or cryptographc purposes.
++    It's useful to send a checksum of the source along with a delta, so the recipient can verify
++    that the source they have is the same as the one you generated the delta from; otherwise the
++    target they create will be garbage. */
++@property (readonly) UInt32 zd_adlerChecksum;
++
++@end
+diff -Naur -U 10 zdelta-2.1/Cocoa/NSData+zdelta.m zdelta-master/Cocoa/NSData+zdelta.m
+--- zdelta-2.1/Cocoa/NSData+zdelta.m	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/Cocoa/NSData+zdelta.m	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,109 @@
++//
++//  NSData+zdelta.m
++//  zdelta
++//
++//  Created by Jens Alfke on 10/27/13.
++//
++
++#import "NSData+zdelta.h"
++#import "zdlib.h"
++#import "zdelta+blocks.h"
++
++@implementation NSData (zdelta)
++
++- (NSData*) zd_deltaTo: (NSData*)targetData {
++    NSParameterAssert(targetData != nil);
++    Bytef* delta = NULL;
++    uLongf deltaSize = 0;
++    // http://cis.poly.edu/zdelta/manual.shtml#compress1
++    int status = zd_compress1(self.bytes, self.length,
++                             targetData.bytes, targetData.length,
++                             &delta, &deltaSize);
++    if (status != ZD_OK)
++        return nil;
++    return [NSData dataWithBytesNoCopy: delta length: deltaSize];
++}
++
++- (NSData*) zd_applyDelta: (NSData*)delta {
++    NSParameterAssert(delta != nil);
++    Bytef* target = NULL;
++    uLongf targetSize = 0;
++    // http://cis.poly.edu/zdelta/manual.shtml#uncompress1
++    int status = zd_uncompress1(self.bytes, self.length,
++                                &target, &targetSize,
++                                delta.bytes, delta.length);
++    if (status != ZD_OK)
++        return nil;
++    return [NSData dataWithBytesNoCopy: target length: targetSize];
++}
++
++
++- (BOOL) zd_deltaTo: (NSData*)targetData
++           onOutput: (ZDeltaOutputBlock)outputBlock
++{
++    NSParameterAssert(targetData != nil);
++    NSParameterAssert(outputBlock != nil);
++    int status = zd_compress_incr(self.bytes, self.length,
++                                  targetData.bytes, targetData.length,
++                                  ^int(const Bytef* delta_piece, uLongf piece_size) {
++                                      return outputBlock(delta_piece, piece_size) ? ZD_OK
++                                                                                  : ZD_STREAM_ERROR;
++                                  });
++    return (status == ZD_OK);
++}
++
++- (BOOL) zd_applyDelta: (NSData*)delta
++              onOutput: (ZDeltaOutputBlock)outputBlock
++{
++    NSParameterAssert(delta != nil);
++    NSParameterAssert(outputBlock != nil);
++    int status = zd_uncompress_incr(self.bytes, self.length,
++                                    ^int(const Bytef* target_piece, uLongf piece_size) {
++                                        return outputBlock(target_piece, piece_size) ? ZD_OK
++                                                                                : ZD_STREAM_ERROR;
++                                    },
++                                    delta.bytes, delta.length);
++    return (status == ZD_OK);
++}
++
+++ (BOOL) zd_applyDelta: (NSData*)delta
++                toFile: (NSURL*)sourceFileURL
++         producingFile: (NSURL*)targetFileURL
++                 error: (NSError**)outError
++{
++    BOOL success = NO;
++    NSData* sourceData = [[NSData alloc] initWithContentsOfURL: sourceFileURL
++                                                       options: NSDataReadingMappedIfSafe|NSDataReadingUncached
++                                                         error: outError];
++    if (!sourceData)
++        return NO;
++    NSOutputStream* output = [NSOutputStream outputStreamWithURL: targetFileURL append: NO];
++    [output open];
++    
++    if (!output.streamError) {
++        success = [sourceData zd_applyDelta: delta onOutput: ^BOOL(const void *bytes, size_t length) {
++            NSInteger written = [output write: bytes maxLength: length];
++            return ((size_t)written == length);
++        }];
++    }
++
++    if (output.streamError) {
++        if (outError)
++            *outError = output.streamError;
++        [[NSFileManager defaultManager] removeItemAtURL: targetFileURL error: NULL];
++        success = NO;
++    } else if (!success && outError) {
++        *outError = [NSError errorWithDomain: @"zdelta" code: -1 userInfo: nil];  //TODO
++    }
++    [output close];
++    return success;
++}
++
++- (UInt32) zd_adlerChecksum {
++    // http://cis.poly.edu/zdelta/manual.shtml#Checksum%20functions
++    uLong adler = zd_adler32(0L, ZD_NULL, 0);
++    return (UInt32)zd_adler32(adler, self.bytes, (uint)self.length);
++}
++
++
++@end
+diff -Naur -U 10 zdelta-2.1/Cocoa/ZDCodec.h zdelta-master/Cocoa/ZDCodec.h
+--- zdelta-2.1/Cocoa/ZDCodec.h	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/Cocoa/ZDCodec.h	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,53 @@
++//
++//  ZDCodec.h
++//  zdelta
++//
++//  Created by Jens Alfke on 2/23/15.
++//  Copyright (c) 2015 Jens Alfke. All rights reserved.
++//
++
++#import <Foundation/Foundation.h>
++
++
++typedef enum : int {
++    ZDStatusOK = 0,
++    ZDStatusEOF = 1,    // decompressor reached EOF; not an error
++    ZDStatusErrno = -1,
++    ZDStatusStreamError = -2,
++    ZDStatusDataError = -3,
++    ZDStatusMemError = -4,
++    ZDStatusBufError = -5,
++    ZDStatusVersionError = -6,
++    ZDStatusReadPastEOF = -100  // not part of zdelta C API
++} ZDStatus;
++
++
++/** Incremental, stream-like ZDelta compressor/decompressor. */
++@interface ZDCodec : NSObject
++
++/** Initializes a codec instance.
++    @param source  The source data of the delta.
++    @param compressing  YES if this operation will create a delta; in this case, the target version
++            data should be passed to -addBytes. 
++            Or NO if applying a data; in this case the delta data should be passed to -addBytes.
++    @return  The initialized instance. */
++- (instancetype)initWithSource: (NSData*)source
++                   compressing: (BOOL)compressing;
++
++/** Adds data to the codec -- target data if compressing, delta data if decompressing.
++    This may generate output data, which will be passed to the onOutput block. 
++    A single call to this method might not invoke the output block at all, or on the other
++    hand it might invoke it multple times.
++
++    When compressing, you must tell the codec the input is complete by calling it one more time
++    with a length of zero. This will trigger it to output the remaining buffered data.
++
++    The return value is YES on success, NO on error. */
++- (BOOL) addBytes: (const void*)bytes
++           length: (size_t)length
++         onOutput: (void(^)(const void*,size_t))onOutput;
++
++/** The codec's current status. */
++@property (readonly) ZDStatus status;
++
++@end
+diff -Naur -U 10 zdelta-2.1/Cocoa/ZDCodec.m zdelta-master/Cocoa/ZDCodec.m
+--- zdelta-2.1/Cocoa/ZDCodec.m	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/Cocoa/ZDCodec.m	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,105 @@
++//
++//  ZDCodec.m
++//  zdelta
++//
++//  Created by Jens Alfke on 2/23/15.
++//  Copyright (c) 2015 Jens Alfke. All rights reserved.
++//
++
++#import "ZDCodec.h"
++#import "zdlib.h"
++
++
++#define kBufferSize (8*1024)
++
++
++@implementation ZDCodec
++{
++    NSData* _source;
++    zd_stream _strm;
++    BOOL _open;
++    BOOL _compressing;
++    uint8_t _buffer[kBufferSize];
++}
++
++@synthesize status=_status;
++
++
++- (instancetype)initWithSource: (NSData*)source
++                   compressing: (BOOL)compressing
++{
++    self = [super init];
++    if (self) {
++        _source = source;
++        _strm.base[0]       = (Bytef*)_source.bytes;
++        _strm.base_avail[0] = _source.length;
++        _strm.refnum        = 1;
++        _strm.next_out  = _buffer;
++        _strm.avail_out = (uInt)kBufferSize;
++        _strm.total_out = 0;
++        _compressing = compressing;
++        int rval = compressing ? zd_deflateInit(&_strm,ZD_DEFAULT_COMPRESSION)
++                               : zd_inflateInit(&_strm);
++        if (rval != ZD_OK)
++            return nil;
++        _open = YES;
++        _status = ZD_OK;
++    }
++    return self;
++}
++
++- (void) dealloc {
++    [self close];
++}
++
++- (BOOL) close {
++    if (_open) {
++        int status;
++        if (_compressing)
++            status = zd_deflateEnd(&_strm);
++        else
++            status = zd_inflateEnd(&_strm);
++        if (_status < ZD_OK && _status >= ZD_OK)
++            _status = status;
++        _open = NO;
++    }
++    return (_status >= ZD_OK);
++}
++
++- (BOOL) addBytes: (const void*)bytes length: (size_t)length
++         onOutput: (void(^)(const void*,size_t))onOutput
++{
++    if (!_open) {
++        if (length == 0)
++            return YES;
++        if (_status >= 0)
++            _status = ZDStatusReadPastEOF;
++        return NO;
++    }
++    _strm.next_in  = (Bytef*) bytes;
++    _strm.avail_in = (uInt)length;
++    do {
++        int rval;
++        if (_compressing)
++            rval = zd_deflate(&_strm, (length > 0 ? Z_NO_FLUSH : ZD_FINISH));
++        else
++            rval = zd_inflate(&_strm, ZD_SYNC_FLUSH);
++        if (rval == ZD_BUF_ERROR || rval == ZD_STREAM_END || length == 0) {
++            // Output is full, so deliver it:
++            onOutput(_buffer, kBufferSize - _strm.avail_out);
++            _strm.next_out  = _buffer;
++            _strm.avail_out = (uInt)kBufferSize;
++            if (rval == ZD_BUF_ERROR)
++                rval = ZD_OK;
++        }
++        if (rval != ZD_OK) {
++            _status = rval;
++            [self close];
++            return rval == ZD_STREAM_END;
++        }
++    } while (_strm.avail_in > 0 || length == 0);
++    return YES;
++}
++
++
++@end
+diff -Naur -U 10 "zdelta-2.1/Cocoa/zdelta Tests/zdelta Tests-Info.plist" "zdelta-master/Cocoa/zdelta Tests/zdelta Tests-Info.plist"
+--- "zdelta-2.1/Cocoa/zdelta Tests/zdelta Tests-Info.plist"	1970-01-01 10:00:00.000000000 +1000
++++ "zdelta-master/Cocoa/zdelta Tests/zdelta Tests-Info.plist"	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,22 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++	<key>CFBundleDevelopmentRegion</key>
++	<string>en</string>
++	<key>CFBundleExecutable</key>
++	<string>${EXECUTABLE_NAME}</string>
++	<key>CFBundleIdentifier</key>
++	<string>edu.poly.cis.${PRODUCT_NAME:rfc1034identifier}</string>
++	<key>CFBundleInfoDictionaryVersion</key>
++	<string>6.0</string>
++	<key>CFBundlePackageType</key>
++	<string>BNDL</string>
++	<key>CFBundleShortVersionString</key>
++	<string>1.0</string>
++	<key>CFBundleSignature</key>
++	<string>????</string>
++	<key>CFBundleVersion</key>
++	<string>1</string>
++</dict>
++</plist>
+diff -Naur -U 10 "zdelta-2.1/Cocoa/zdelta Tests/zdelta_Tests.m" "zdelta-master/Cocoa/zdelta Tests/zdelta_Tests.m"
+--- "zdelta-2.1/Cocoa/zdelta Tests/zdelta_Tests.m"	1970-01-01 10:00:00.000000000 +1000
++++ "zdelta-master/Cocoa/zdelta Tests/zdelta_Tests.m"	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,182 @@
++//
++//  zdelta_Tests.m
++//  zdelta Tests
++//
++//  Created by Jens Alfke on 10/27/13.
++//  Copyright (c) 2013 zdelta. All rights reserved.
++//
++
++#import "NSData+zdelta.h"
++#import "ZDCodec.h"
++#import "zdlib.h"
++#import <XCTest/XCTest.h>
++
++static NSData* randomData(size_t length) {
++    NSMutableData* data = [NSMutableData dataWithLength: length];
++    SecRandomCopyBytes(kSecRandomDefault, data.length, data.mutableBytes);
++    return data;
++}
++
++@interface zdelta_Tests : XCTestCase
++@end
++
++@implementation zdelta_Tests
++{
++    NSString* _sourcePath, *_targetPath;
++    NSData *_source, *_target;
++}
++
++- (void)setUp
++{
++    [super setUp];
++    _sourcePath = [[NSBundle bundleForClass: [self class]] pathForResource: @"README" ofType: @""];
++    XCTAssertNotNil(_sourcePath, @"Couldn't read README");
++    _source = [NSData dataWithContentsOfFile: _sourcePath];
++    _targetPath = [[NSBundle bundleForClass: [self class]] pathForResource: @"README" ofType: @"md"];
++    XCTAssertNotNil(_targetPath, @"Couldn't read README.md");
++    _target = [NSData dataWithContentsOfFile: _targetPath];
++}
++
++- (void)tearDown
++{
++    [super tearDown];
++}
++
++- (void)testDelta
++{
++    NSLog(@"zdelta version %s", zdlibVersion());
++    NSLog(@"Source length = %u bytes", (unsigned)_source.length);
++    NSLog(@"Target length = %u bytes", (unsigned)_target.length);
++
++    NSData *delta = [_source zd_deltaTo: _source];
++    XCTAssertNotNil(delta, @"zd_deltaTo: failed");
++    NSLog(@"Null delta length = %u bytes", (unsigned)delta.length);
++
++    delta = [_source zd_deltaTo: _target];
++    XCTAssertNotNil(delta, @"zd_deltaTo: failed");
++    NSLog(@"Delta length = %u bytes", (unsigned)delta.length);
++
++    NSData* target2 = [_source zd_applyDelta: delta];
++    XCTAssertNotNil(delta, @"zd_applyDelta: failed");
++    XCTAssertEqualObjects(target2, _target, @"Applying delta gave wrong result");
++}
++
++- (void)testLargeDelta
++{
++    NSData* source = randomData(200000);
++    NSData* target = randomData(200000);
++
++    NSData *delta = [source zd_deltaTo: source];
++    XCTAssertNotNil(delta, @"zd_deltaTo: failed");
++    NSLog(@"Null delta length = %u bytes", (unsigned)delta.length);
++
++    delta = [source zd_deltaTo: target];
++    XCTAssertNotNil(delta, @"zd_deltaTo: failed");
++    NSLog(@"Delta length = %u bytes", (unsigned)delta.length);
++
++    NSData* target2 = [source zd_applyDelta: delta];
++    XCTAssertNotNil(delta, @"zd_applyDelta: failed");
++    XCTAssertEqualObjects(target2, target, @"Applying delta gave wrong result");
++}
++
++- (void) testIncrementalDelta {
++    NSMutableData* delta = [NSMutableData data];
++    BOOL ok = [_source zd_deltaTo: _target onOutput: ^BOOL(const void *deltaBytes, size_t deltaLength) {
++        NSLog(@"... got %u bytes at %p", (unsigned)deltaLength, deltaBytes);
++        [delta appendBytes: deltaBytes length: deltaLength];
++        return YES;
++    }];
++    XCTAssert(ok, @"zd_deltaTo:onOutput: failed");
++    NSLog(@"Delta length = %u bytes", (unsigned)delta.length);
++    XCTAssertEqualObjects(delta, [_source zd_deltaTo: _target], @"Got wrong delta");
++}
++
++- (void) testLargeIncrementalDelta {
++    NSData* source = randomData(200000);
++    NSData* target = randomData(200000);
++    NSMutableData* delta = [NSMutableData data];
++    BOOL ok = [source zd_deltaTo: target onOutput: ^BOOL(const void *deltaBytes, size_t deltaLength) {
++        NSLog(@"... got %u bytes at %p", (unsigned)deltaLength, deltaBytes);
++        [delta appendBytes: deltaBytes length: deltaLength];
++        return YES;
++    }];
++    XCTAssert(ok, @"zd_deltaTo:onOutput: failed");
++    NSLog(@"Delta length = %u bytes", (unsigned)delta.length);
++    XCTAssertEqualObjects(delta, [source zd_deltaTo: target], @"Got wrong delta");
++
++    NSMutableData* target2 = [NSMutableData data];
++    ok = [source zd_applyDelta: delta onOutput: ^BOOL(const void *targetBytes, size_t targetLength) {
++        NSLog(@"... got %u bytes at %p", (unsigned)targetLength, targetBytes);
++        [target2 appendBytes: targetBytes length: targetLength];
++        return YES;
++    }];
++    XCTAssertEqualObjects(target2, target, @"Applying delta gave wrong incremental result");
++}
++
++- (void) testFileBasedDelta {
++    NSData* delta = [_source zd_deltaTo: _target];
++    NSError* error;
++    BOOL ok = [NSData zd_applyDelta: delta
++                             toFile: [NSURL fileURLWithPath: _sourcePath]
++                      producingFile: [NSURL fileURLWithPath: @"/tmp/zdelta_tmp"]
++                              error: &error];
++    XCTAssert(ok);
++    NSData* result = [NSData dataWithContentsOfFile: @"/tmp/zdelta_tmp"];
++    XCTAssertEqualObjects(result, _target, @"Wrong target file contents");
++}
++
++- (void) testAdler {
++    UInt32 sourceChecksum = _source.zd_adlerChecksum;
++    UInt32 targetChecksum = _target.zd_adlerChecksum;
++    NSLog(@"Source checksum = %08X", sourceChecksum);
++    NSLog(@"Target checksum = %08X", targetChecksum);
++    XCTAssertNotEqual(sourceChecksum, targetChecksum, @"Checksums shouldn't match");
++    // (I guess theoretically there is a tiny chance they could match...)
++}
++
++- (void) testCodec {
++    NSData* source = randomData(200000);
++    NSData* target = randomData(200000);
++    NSMutableData* delta = [NSMutableData data];
++
++    NSLog(@"Compressing ...");
++    ZDCodec* codec = [[ZDCodec alloc] initWithSource: source compressing: YES];
++    XCTAssertNotNil(codec);
++    const char* targetBytes = target.bytes;
++    const size_t chunkSize = 35433; // I just made this up
++    for (size_t offset=0; YES; offset += chunkSize) {
++        size_t outLength = MIN(chunkSize, MAX(0, (ssize_t)target.length-(ssize_t)offset));
++        NSLog(@"Adding %lu bytes to codec...", outLength);
++        [codec addBytes: targetBytes+offset
++                 length: outLength
++               onOutput: ^(const void *out, size_t outLength) {
++                   NSLog(@"Codec produced %lu bytes", outLength);
++                   [delta appendBytes: out length: outLength];
++               }];
++        XCTAssertEqual(codec.status, ZDStatusOK);
++        if (outLength == 0)
++            break;
++    }
++    NSLog(@"Delta length = %u bytes", (unsigned)delta.length);
++
++    NSLog(@"Decompressing ...");
++    NSMutableData* target2 = [NSMutableData data];
++    codec = [[ZDCodec alloc] initWithSource: source compressing: NO];
++    XCTAssertNotNil(codec);
++    const char* deltaBytes = delta.bytes;
++    for (size_t offset=0; offset < target.length; offset += chunkSize) {
++        size_t outLength = MIN(chunkSize, delta.length-offset);
++        NSLog(@"Adding %lu bytes to codec...", outLength);
++        [codec addBytes: deltaBytes+offset
++                 length: outLength
++               onOutput: ^(const void *out, size_t outLength) {
++                   NSLog(@"Codec produced %lu bytes", outLength);
++                   [target2 appendBytes: out length: outLength];
++               }];
++        XCTAssertEqual(codec.status, ZDStatusOK);
++    }
++    NSLog(@"Recreated target length = %u bytes", (unsigned)target2.length);
++    XCTAssertEqualObjects(target2, target);
++}
++
++@end
+diff -Naur -U 10 zdelta-2.1/Cocoa/zdelta.xcodeproj/project.pbxproj zdelta-master/Cocoa/zdelta.xcodeproj/project.pbxproj
+--- zdelta-2.1/Cocoa/zdelta.xcodeproj/project.pbxproj	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/Cocoa/zdelta.xcodeproj/project.pbxproj	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,969 @@
++// !$*UTF8*$!
++{
++	archiveVersion = 1;
++	classes = {
++	};
++	objectVersion = 46;
++	objects = {
++
++/* Begin PBXBuildFile section */
++		271D18391A9BEA0D001DDDB1 /* ZDCodec.h in Headers */ = {isa = PBXBuildFile; fileRef = 271D18371A9BEA0D001DDDB1 /* ZDCodec.h */; };
++		271D183A1A9BEA0D001DDDB1 /* ZDCodec.m in Sources */ = {isa = PBXBuildFile; fileRef = 271D18381A9BEA0D001DDDB1 /* ZDCodec.m */; };
++		27BDA863181CF95200F27A11 /* adler32.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA845181CF95200F27A11 /* adler32.c */; };
++		27BDA864181CF95200F27A11 /* deflate.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA846181CF95200F27A11 /* deflate.c */; };
++		27BDA865181CF95200F27A11 /* deflate.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA847181CF95200F27A11 /* deflate.h */; };
++		27BDA866181CF95200F27A11 /* infblock.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA848181CF95200F27A11 /* infblock.c */; };
++		27BDA867181CF95200F27A11 /* infblock.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA849181CF95200F27A11 /* infblock.h */; };
++		27BDA868181CF95200F27A11 /* infcodes.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA84A181CF95200F27A11 /* infcodes.c */; };
++		27BDA869181CF95200F27A11 /* infcodes.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA84B181CF95200F27A11 /* infcodes.h */; };
++		27BDA86A181CF95200F27A11 /* inffast.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA84C181CF95200F27A11 /* inffast.c */; };
++		27BDA86B181CF95200F27A11 /* inffast.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA84D181CF95200F27A11 /* inffast.h */; };
++		27BDA86C181CF95200F27A11 /* inffixed.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA84E181CF95200F27A11 /* inffixed.h */; };
++		27BDA86D181CF95200F27A11 /* inflate.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA84F181CF95200F27A11 /* inflate.c */; };
++		27BDA86E181CF95200F27A11 /* inftrees.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA850181CF95200F27A11 /* inftrees.c */; };
++		27BDA86F181CF95200F27A11 /* inftrees.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA851181CF95200F27A11 /* inftrees.h */; };
++		27BDA870181CF95200F27A11 /* infutil.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA852181CF95200F27A11 /* infutil.c */; };
++		27BDA871181CF95200F27A11 /* infutil.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA853181CF95200F27A11 /* infutil.h */; };
++		27BDA873181CF95200F27A11 /* tailor.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA855181CF95200F27A11 /* tailor.h */; };
++		27BDA874181CF95200F27A11 /* trees.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA856181CF95200F27A11 /* trees.c */; };
++		27BDA875181CF95200F27A11 /* trees.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA857181CF95200F27A11 /* trees.h */; };
++		27BDA876181CF95200F27A11 /* zd_mem.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA858181CF95200F27A11 /* zd_mem.c */; };
++		27BDA877181CF95200F27A11 /* zd_mem.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA859181CF95200F27A11 /* zd_mem.h */; };
++		27BDA879181CF95200F27A11 /* zdconf.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA85B181CF95200F27A11 /* zdconf.h */; };
++		27BDA87A181CF95200F27A11 /* zdelta.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA85C181CF95200F27A11 /* zdelta.c */; };
++		27BDA87B181CF95200F27A11 /* zdlib.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA85D181CF95200F27A11 /* zdlib.h */; };
++		27BDA87D181CF95200F27A11 /* zutil.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA85F181CF95200F27A11 /* zutil.c */; };
++		27BDA87E181CF95200F27A11 /* zutil.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA860181CF95200F27A11 /* zutil.h */; };
++		27BDA891181CFA7600F27A11 /* zdc.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA880181CFA2C00F27A11 /* zdc.c */; };
++		27BDA892181CFA7D00F27A11 /* libzdelta.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 27BDA83B181CF83400F27A11 /* libzdelta.a */; };
++		27BDA899181CFA9300F27A11 /* libzdelta.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 27BDA83B181CF83400F27A11 /* libzdelta.a */; };
++		27BDA89F181CFA9F00F27A11 /* zdu.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA881181CFA2C00F27A11 /* zdu.c */; };
++		27BDA8A3181CFBE400F27A11 /* NSData+zdelta.h in Headers */ = {isa = PBXBuildFile; fileRef = 27BDA8A1181CFBE400F27A11 /* NSData+zdelta.h */; };
++		27BDA8A4181CFBE400F27A11 /* NSData+zdelta.m in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA8A2181CFBE400F27A11 /* NSData+zdelta.m */; };
++		27E6591D181D8E400039BDB5 /* zdelta+blocks.c in Sources */ = {isa = PBXBuildFile; fileRef = 27E6591C181D8E400039BDB5 /* zdelta+blocks.c */; };
++		27E65926181DA4690039BDB5 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E65925181DA4690039BDB5 /* XCTest.framework */; };
++		27E6592E181DA4690039BDB5 /* zdelta_Tests.m in Sources */ = {isa = PBXBuildFile; fileRef = 27E6592D181DA4690039BDB5 /* zdelta_Tests.m */; };
++		27E65935181DA6640039BDB5 /* libzdelta.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 27BDA83B181CF83400F27A11 /* libzdelta.a */; };
++		27E65937181DA9F10039BDB5 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E65936181DA9F10039BDB5 /* Security.framework */; };
++		27E65940181DD3A50039BDB5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E6593F181DD3A50039BDB5 /* Foundation.framework */; };
++		27E6594D181DD3A50039BDB5 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E65925181DA4690039BDB5 /* XCTest.framework */; };
++		27E6594E181DD3A50039BDB5 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E6593F181DD3A50039BDB5 /* Foundation.framework */; };
++		27E65950181DD3A50039BDB5 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E6594F181DD3A50039BDB5 /* UIKit.framework */; };
++		27E65953181DD3A50039BDB5 /* libzdelta-ios.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E6593E181DD3A50039BDB5 /* libzdelta-ios.a */; };
++		27E65962181DD4170039BDB5 /* zdelta+blocks.c in Sources */ = {isa = PBXBuildFile; fileRef = 27E6591C181D8E400039BDB5 /* zdelta+blocks.c */; };
++		27E65963181DD4170039BDB5 /* adler32.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA845181CF95200F27A11 /* adler32.c */; };
++		27E65964181DD4170039BDB5 /* deflate.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA846181CF95200F27A11 /* deflate.c */; };
++		27E65965181DD4170039BDB5 /* infblock.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA848181CF95200F27A11 /* infblock.c */; };
++		27E65966181DD4170039BDB5 /* infcodes.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA84A181CF95200F27A11 /* infcodes.c */; };
++		27E65967181DD4170039BDB5 /* inffast.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA84C181CF95200F27A11 /* inffast.c */; };
++		27E65968181DD4170039BDB5 /* inflate.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA84F181CF95200F27A11 /* inflate.c */; };
++		27E65969181DD4170039BDB5 /* inftrees.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA850181CF95200F27A11 /* inftrees.c */; };
++		27E6596A181DD4170039BDB5 /* infutil.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA852181CF95200F27A11 /* infutil.c */; };
++		27E6596B181DD4170039BDB5 /* trees.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA856181CF95200F27A11 /* trees.c */; };
++		27E6596C181DD4170039BDB5 /* zd_mem.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA858181CF95200F27A11 /* zd_mem.c */; };
++		27E6596D181DD4170039BDB5 /* zdelta.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA85C181CF95200F27A11 /* zdelta.c */; };
++		27E6596E181DD4170039BDB5 /* zutil.c in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA85F181CF95200F27A11 /* zutil.c */; };
++		27E65970181DD4C40039BDB5 /* zdelta_Tests.m in Sources */ = {isa = PBXBuildFile; fileRef = 27E6592D181DA4690039BDB5 /* zdelta_Tests.m */; };
++		27E66A4A1A6F384C0091DA3F /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 27E66A491A6F384C0091DA3F /* Security.framework */; };
++		27E66A4D1A7014230091DA3F /* README in Resources */ = {isa = PBXBuildFile; fileRef = 27E66A4B1A7014230091DA3F /* README */; };
++		27E66A4E1A7014230091DA3F /* README in Resources */ = {isa = PBXBuildFile; fileRef = 27E66A4B1A7014230091DA3F /* README */; };
++		27E66A541A7015F80091DA3F /* NSData+zdelta.m in Sources */ = {isa = PBXBuildFile; fileRef = 27BDA8A2181CFBE400F27A11 /* NSData+zdelta.m */; };
++		27E66A551A7017A40091DA3F /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 27E65939181DCDFB0039BDB5 /* README.md */; };
++		27E66A561A7017A60091DA3F /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 27E65939181DCDFB0039BDB5 /* README.md */; };
++/* End PBXBuildFile section */
++
++/* Begin PBXContainerItemProxy section */
++		27BDA88F181CFA7000F27A11 /* PBXContainerItemProxy */ = {
++			isa = PBXContainerItemProxy;
++			containerPortal = 27BDA833181CF83400F27A11 /* Project object */;
++			proxyType = 1;
++			remoteGlobalIDString = 27BDA83A181CF83400F27A11;
++			remoteInfo = zdelta;
++		};
++		27BDA895181CFA9300F27A11 /* PBXContainerItemProxy */ = {
++			isa = PBXContainerItemProxy;
++			containerPortal = 27BDA833181CF83400F27A11 /* Project object */;
++			proxyType = 1;
++			remoteGlobalIDString = 27BDA83A181CF83400F27A11;
++			remoteInfo = zdelta;
++		};
++		27E65930181DA4690039BDB5 /* PBXContainerItemProxy */ = {
++			isa = PBXContainerItemProxy;
++			containerPortal = 27BDA833181CF83400F27A11 /* Project object */;
++			proxyType = 1;
++			remoteGlobalIDString = 27BDA83A181CF83400F27A11;
++			remoteInfo = zdelta;
++		};
++		27E65951181DD3A50039BDB5 /* PBXContainerItemProxy */ = {
++			isa = PBXContainerItemProxy;
++			containerPortal = 27BDA833181CF83400F27A11 /* Project object */;
++			proxyType = 1;
++			remoteGlobalIDString = 27E6593D181DD3A50039BDB5;
++			remoteInfo = "zdelta-ios";
++		};
++/* End PBXContainerItemProxy section */
++
++/* Begin PBXCopyFilesBuildPhase section */
++		27BDA884181CFA4F00F27A11 /* CopyFiles */ = {
++			isa = PBXCopyFilesBuildPhase;
++			buildActionMask = 2147483647;
++			dstPath = /usr/share/man/man1/;
++			dstSubfolderSpec = 0;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 1;
++		};
++		27BDA89A181CFA9300F27A11 /* CopyFiles */ = {
++			isa = PBXCopyFilesBuildPhase;
++			buildActionMask = 2147483647;
++			dstPath = /usr/share/man/man1/;
++			dstSubfolderSpec = 0;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 1;
++		};
++		27E6593C181DD3A50039BDB5 /* CopyFiles */ = {
++			isa = PBXCopyFilesBuildPhase;
++			buildActionMask = 2147483647;
++			dstPath = "include/$(PRODUCT_NAME)";
++			dstSubfolderSpec = 16;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXCopyFilesBuildPhase section */
++
++/* Begin PBXFileReference section */
++		271D18371A9BEA0D001DDDB1 /* ZDCodec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ZDCodec.h; sourceTree = "<group>"; };
++		271D18381A9BEA0D001DDDB1 /* ZDCodec.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ZDCodec.m; sourceTree = "<group>"; };
++		27BDA83B181CF83400F27A11 /* libzdelta.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libzdelta.a; sourceTree = BUILT_PRODUCTS_DIR; };
++		27BDA845181CF95200F27A11 /* adler32.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = adler32.c; sourceTree = "<group>"; };
++		27BDA846181CF95200F27A11 /* deflate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = deflate.c; sourceTree = "<group>"; };
++		27BDA847181CF95200F27A11 /* deflate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = deflate.h; sourceTree = "<group>"; };
++		27BDA848181CF95200F27A11 /* infblock.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = infblock.c; sourceTree = "<group>"; };
++		27BDA849181CF95200F27A11 /* infblock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = infblock.h; sourceTree = "<group>"; };
++		27BDA84A181CF95200F27A11 /* infcodes.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = infcodes.c; sourceTree = "<group>"; };
++		27BDA84B181CF95200F27A11 /* infcodes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = infcodes.h; sourceTree = "<group>"; };
++		27BDA84C181CF95200F27A11 /* inffast.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = inffast.c; sourceTree = "<group>"; };
++		27BDA84D181CF95200F27A11 /* inffast.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = inffast.h; sourceTree = "<group>"; };
++		27BDA84E181CF95200F27A11 /* inffixed.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = inffixed.h; sourceTree = "<group>"; };
++		27BDA84F181CF95200F27A11 /* inflate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = inflate.c; sourceTree = "<group>"; };
++		27BDA850181CF95200F27A11 /* inftrees.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = inftrees.c; sourceTree = "<group>"; };
++		27BDA851181CF95200F27A11 /* inftrees.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = inftrees.h; sourceTree = "<group>"; };
++		27BDA852181CF95200F27A11 /* infutil.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = infutil.c; sourceTree = "<group>"; };
++		27BDA853181CF95200F27A11 /* infutil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = infutil.h; sourceTree = "<group>"; };
++		27BDA855181CF95200F27A11 /* tailor.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = tailor.h; sourceTree = "<group>"; };
++		27BDA856181CF95200F27A11 /* trees.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = trees.c; sourceTree = "<group>"; };
++		27BDA857181CF95200F27A11 /* trees.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = trees.h; sourceTree = "<group>"; };
++		27BDA858181CF95200F27A11 /* zd_mem.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = zd_mem.c; sourceTree = "<group>"; };
++		27BDA859181CF95200F27A11 /* zd_mem.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = zd_mem.h; sourceTree = "<group>"; };
++		27BDA85B181CF95200F27A11 /* zdconf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = zdconf.h; sourceTree = "<group>"; };
++		27BDA85C181CF95200F27A11 /* zdelta.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = zdelta.c; sourceTree = "<group>"; };
++		27BDA85D181CF95200F27A11 /* zdlib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = zdlib.h; sourceTree = "<group>"; };
++		27BDA85F181CF95200F27A11 /* zutil.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = zutil.c; sourceTree = "<group>"; };
++		27BDA860181CF95200F27A11 /* zutil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = zutil.h; sourceTree = "<group>"; };
++		27BDA880181CFA2C00F27A11 /* zdc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = zdc.c; sourceTree = "<group>"; };
++		27BDA881181CFA2C00F27A11 /* zdu.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = zdu.c; sourceTree = "<group>"; };
++		27BDA886181CFA4F00F27A11 /* zdc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = zdc; sourceTree = BUILT_PRODUCTS_DIR; };
++		27BDA89E181CFA9300F27A11 /* zdu */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = zdu; sourceTree = BUILT_PRODUCTS_DIR; };
++		27BDA8A1181CFBE400F27A11 /* NSData+zdelta.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSData+zdelta.h"; sourceTree = "<group>"; };
++		27BDA8A2181CFBE400F27A11 /* NSData+zdelta.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSData+zdelta.m"; sourceTree = "<group>"; };
++		27BDA8A5181CFCE500F27A11 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
++		27E6591C181D8E400039BDB5 /* zdelta+blocks.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.c.c; path = "zdelta+blocks.c"; sourceTree = "<group>"; };
++		27E6591E181D8F2E0039BDB5 /* zdelta+blocks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "zdelta+blocks.h"; sourceTree = "<group>"; };
++		27E65923181DA4690039BDB5 /* zdelta Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "zdelta Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
++		27E65925181DA4690039BDB5 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
++		27E65929181DA4690039BDB5 /* zdelta Tests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "zdelta Tests-Info.plist"; sourceTree = "<group>"; };
++		27E6592D181DA4690039BDB5 /* zdelta_Tests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = zdelta_Tests.m; sourceTree = "<group>"; };
++		27E65936181DA9F10039BDB5 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
++		27E65939181DCDFB0039BDB5 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = README.md; path = ../README.md; sourceTree = "<group>"; };
++		27E6593E181DD3A50039BDB5 /* libzdelta-ios.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libzdelta-ios.a"; sourceTree = BUILT_PRODUCTS_DIR; };
++		27E6593F181DD3A50039BDB5 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
++		27E6594C181DD3A50039BDB5 /* zdelta-iosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "zdelta-iosTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
++		27E6594F181DD3A50039BDB5 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = Library/Frameworks/UIKit.framework; sourceTree = DEVELOPER_DIR; };
++		27E66A491A6F384C0091DA3F /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS8.1.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
++		27E66A4B1A7014230091DA3F /* README */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = README; path = ../README; sourceTree = "<group>"; };
++/* End PBXFileReference section */
++
++/* Begin PBXFrameworksBuildPhase section */
++		27BDA838181CF83400F27A11 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27BDA883181CFA4F00F27A11 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27BDA892181CFA7D00F27A11 /* libzdelta.a in Frameworks */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27BDA898181CFA9300F27A11 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27BDA899181CFA9300F27A11 /* libzdelta.a in Frameworks */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27E65920181DA4690039BDB5 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E65937181DA9F10039BDB5 /* Security.framework in Frameworks */,
++				27E65935181DA6640039BDB5 /* libzdelta.a in Frameworks */,
++				27E65926181DA4690039BDB5 /* XCTest.framework in Frameworks */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27E6593B181DD3A50039BDB5 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E65940181DD3A50039BDB5 /* Foundation.framework in Frameworks */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27E65949181DD3A50039BDB5 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E66A4A1A6F384C0091DA3F /* Security.framework in Frameworks */,
++				27E6594D181DD3A50039BDB5 /* XCTest.framework in Frameworks */,
++				27E65953181DD3A50039BDB5 /* libzdelta-ios.a in Frameworks */,
++				27E65950181DD3A50039BDB5 /* UIKit.framework in Frameworks */,
++				27E6594E181DD3A50039BDB5 /* Foundation.framework in Frameworks */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXFrameworksBuildPhase section */
++
++/* Begin PBXGroup section */
++		27BDA832181CF83400F27A11 = {
++			isa = PBXGroup;
++			children = (
++				27E65939181DCDFB0039BDB5 /* README.md */,
++				27E66A4B1A7014230091DA3F /* README */,
++				27BDA8A0181CFBB900F27A11 /* Cocoa API */,
++				27E65938181DB6820039BDB5 /* blocks */,
++				27BDA842181CF8D600F27A11 /* source */,
++				27BDA87F181CFA0A00F27A11 /* tools */,
++				27E65927181DA4690039BDB5 /* Cocoa Tests */,
++				27E65924181DA4690039BDB5 /* Frameworks */,
++				27BDA83C181CF83400F27A11 /* Products */,
++			);
++			sourceTree = "<group>";
++		};
++		27BDA83C181CF83400F27A11 /* Products */ = {
++			isa = PBXGroup;
++			children = (
++				27BDA83B181CF83400F27A11 /* libzdelta.a */,
++				27BDA886181CFA4F00F27A11 /* zdc */,
++				27BDA89E181CFA9300F27A11 /* zdu */,
++				27E65923181DA4690039BDB5 /* zdelta Tests.xctest */,
++				27E6593E181DD3A50039BDB5 /* libzdelta-ios.a */,
++				27E6594C181DD3A50039BDB5 /* zdelta-iosTests.xctest */,
++			);
++			name = Products;
++			sourceTree = "<group>";
++		};
++		27BDA842181CF8D600F27A11 /* source */ = {
++			isa = PBXGroup;
++			children = (
++				27BDA8A5181CFCE500F27A11 /* README */,
++				27BDA845181CF95200F27A11 /* adler32.c */,
++				27BDA846181CF95200F27A11 /* deflate.c */,
++				27BDA847181CF95200F27A11 /* deflate.h */,
++				27BDA848181CF95200F27A11 /* infblock.c */,
++				27BDA849181CF95200F27A11 /* infblock.h */,
++				27BDA84A181CF95200F27A11 /* infcodes.c */,
++				27BDA84B181CF95200F27A11 /* infcodes.h */,
++				27BDA84C181CF95200F27A11 /* inffast.c */,
++				27BDA84D181CF95200F27A11 /* inffast.h */,
++				27BDA84E181CF95200F27A11 /* inffixed.h */,
++				27BDA84F181CF95200F27A11 /* inflate.c */,
++				27BDA850181CF95200F27A11 /* inftrees.c */,
++				27BDA851181CF95200F27A11 /* inftrees.h */,
++				27BDA852181CF95200F27A11 /* infutil.c */,
++				27BDA853181CF95200F27A11 /* infutil.h */,
++				27BDA855181CF95200F27A11 /* tailor.h */,
++				27BDA856181CF95200F27A11 /* trees.c */,
++				27BDA857181CF95200F27A11 /* trees.h */,
++				27BDA858181CF95200F27A11 /* zd_mem.c */,
++				27BDA859181CF95200F27A11 /* zd_mem.h */,
++				27BDA85B181CF95200F27A11 /* zdconf.h */,
++				27BDA85C181CF95200F27A11 /* zdelta.c */,
++				27BDA85D181CF95200F27A11 /* zdlib.h */,
++				27BDA85F181CF95200F27A11 /* zutil.c */,
++				27BDA860181CF95200F27A11 /* zutil.h */,
++			);
++			name = source;
++			path = ..;
++			sourceTree = "<group>";
++		};
++		27BDA87F181CFA0A00F27A11 /* tools */ = {
++			isa = PBXGroup;
++			children = (
++				27BDA880181CFA2C00F27A11 /* zdc.c */,
++				27BDA881181CFA2C00F27A11 /* zdu.c */,
++			);
++			name = tools;
++			path = ..;
++			sourceTree = "<group>";
++		};
++		27BDA8A0181CFBB900F27A11 /* Cocoa API */ = {
++			isa = PBXGroup;
++			children = (
++				27BDA8A1181CFBE400F27A11 /* NSData+zdelta.h */,
++				27BDA8A2181CFBE400F27A11 /* NSData+zdelta.m */,
++				271D18371A9BEA0D001DDDB1 /* ZDCodec.h */,
++				271D18381A9BEA0D001DDDB1 /* ZDCodec.m */,
++			);
++			name = "Cocoa API";
++			sourceTree = "<group>";
++		};
++		27E65924181DA4690039BDB5 /* Frameworks */ = {
++			isa = PBXGroup;
++			children = (
++				27E66A491A6F384C0091DA3F /* Security.framework */,
++				27E65936181DA9F10039BDB5 /* Security.framework */,
++				27E65925181DA4690039BDB5 /* XCTest.framework */,
++				27E6593F181DD3A50039BDB5 /* Foundation.framework */,
++				27E6594F181DD3A50039BDB5 /* UIKit.framework */,
++			);
++			name = Frameworks;
++			sourceTree = "<group>";
++		};
++		27E65927181DA4690039BDB5 /* Cocoa Tests */ = {
++			isa = PBXGroup;
++			children = (
++				27E6592D181DA4690039BDB5 /* zdelta_Tests.m */,
++				27E65929181DA4690039BDB5 /* zdelta Tests-Info.plist */,
++			);
++			name = "Cocoa Tests";
++			path = "zdelta Tests";
++			sourceTree = "<group>";
++		};
++		27E65938181DB6820039BDB5 /* blocks */ = {
++			isa = PBXGroup;
++			children = (
++				27E6591C181D8E400039BDB5 /* zdelta+blocks.c */,
++				27E6591E181D8F2E0039BDB5 /* zdelta+blocks.h */,
++			);
++			name = blocks;
++			path = ../blocks;
++			sourceTree = "<group>";
++		};
++/* End PBXGroup section */
++
++/* Begin PBXHeadersBuildPhase section */
++		27BDA839181CF83400F27A11 /* Headers */ = {
++			isa = PBXHeadersBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27BDA86C181CF95200F27A11 /* inffixed.h in Headers */,
++				27BDA873181CF95200F27A11 /* tailor.h in Headers */,
++				27BDA867181CF95200F27A11 /* infblock.h in Headers */,
++				271D18391A9BEA0D001DDDB1 /* ZDCodec.h in Headers */,
++				27BDA875181CF95200F27A11 /* trees.h in Headers */,
++				27BDA865181CF95200F27A11 /* deflate.h in Headers */,
++				27BDA8A3181CFBE400F27A11 /* NSData+zdelta.h in Headers */,
++				27BDA86B181CF95200F27A11 /* inffast.h in Headers */,
++				27BDA87B181CF95200F27A11 /* zdlib.h in Headers */,
++				27BDA87E181CF95200F27A11 /* zutil.h in Headers */,
++				27BDA86F181CF95200F27A11 /* inftrees.h in Headers */,
++				27BDA871181CF95200F27A11 /* infutil.h in Headers */,
++				27BDA879181CF95200F27A11 /* zdconf.h in Headers */,
++				27BDA877181CF95200F27A11 /* zd_mem.h in Headers */,
++				27BDA869181CF95200F27A11 /* infcodes.h in Headers */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXHeadersBuildPhase section */
++
++/* Begin PBXNativeTarget section */
++		27BDA83A181CF83400F27A11 /* zdelta */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = 27BDA83F181CF83400F27A11 /* Build configuration list for PBXNativeTarget "zdelta" */;
++			buildPhases = (
++				27BDA837181CF83400F27A11 /* Sources */,
++				27BDA838181CF83400F27A11 /* Frameworks */,
++				27BDA839181CF83400F27A11 /* Headers */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++			);
++			name = zdelta;
++			productName = zdelta;
++			productReference = 27BDA83B181CF83400F27A11 /* libzdelta.a */;
++			productType = "com.apple.product-type.library.static";
++		};
++		27BDA885181CFA4F00F27A11 /* zdc */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = 27BDA88C181CFA4F00F27A11 /* Build configuration list for PBXNativeTarget "zdc" */;
++			buildPhases = (
++				27BDA882181CFA4F00F27A11 /* Sources */,
++				27BDA883181CFA4F00F27A11 /* Frameworks */,
++				27BDA884181CFA4F00F27A11 /* CopyFiles */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++				27BDA890181CFA7000F27A11 /* PBXTargetDependency */,
++			);
++			name = zdc;
++			productName = zdc;
++			productReference = 27BDA886181CFA4F00F27A11 /* zdc */;
++			productType = "com.apple.product-type.tool";
++		};
++		27BDA893181CFA9300F27A11 /* zdu */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = 27BDA89B181CFA9300F27A11 /* Build configuration list for PBXNativeTarget "zdu" */;
++			buildPhases = (
++				27BDA896181CFA9300F27A11 /* Sources */,
++				27BDA898181CFA9300F27A11 /* Frameworks */,
++				27BDA89A181CFA9300F27A11 /* CopyFiles */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++				27BDA894181CFA9300F27A11 /* PBXTargetDependency */,
++			);
++			name = zdu;
++			productName = zdc;
++			productReference = 27BDA89E181CFA9300F27A11 /* zdu */;
++			productType = "com.apple.product-type.tool";
++		};
++		27E65922181DA4690039BDB5 /* zdelta Tests */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = 27E65932181DA4690039BDB5 /* Build configuration list for PBXNativeTarget "zdelta Tests" */;
++			buildPhases = (
++				27E6591F181DA4690039BDB5 /* Sources */,
++				27E65920181DA4690039BDB5 /* Frameworks */,
++				27E65921181DA4690039BDB5 /* Resources */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++				27E65931181DA4690039BDB5 /* PBXTargetDependency */,
++			);
++			name = "zdelta Tests";
++			productName = "zdelta Tests";
++			productReference = 27E65923181DA4690039BDB5 /* zdelta Tests.xctest */;
++			productType = "com.apple.product-type.bundle.unit-test";
++		};
++		27E6593D181DD3A50039BDB5 /* zdelta-ios */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = 27E6595C181DD3A50039BDB5 /* Build configuration list for PBXNativeTarget "zdelta-ios" */;
++			buildPhases = (
++				27E6593A181DD3A50039BDB5 /* Sources */,
++				27E6593B181DD3A50039BDB5 /* Frameworks */,
++				27E6593C181DD3A50039BDB5 /* CopyFiles */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++			);
++			name = "zdelta-ios";
++			productName = "zdelta-ios";
++			productReference = 27E6593E181DD3A50039BDB5 /* libzdelta-ios.a */;
++			productType = "com.apple.product-type.library.static";
++		};
++		27E6594B181DD3A50039BDB5 /* zdelta-iosTests */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = 27E6595F181DD3A50039BDB5 /* Build configuration list for PBXNativeTarget "zdelta-iosTests" */;
++			buildPhases = (
++				27E65948181DD3A50039BDB5 /* Sources */,
++				27E65949181DD3A50039BDB5 /* Frameworks */,
++				27E6594A181DD3A50039BDB5 /* Resources */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++				27E65952181DD3A50039BDB5 /* PBXTargetDependency */,
++			);
++			name = "zdelta-iosTests";
++			productName = "zdelta-iosTests";
++			productReference = 27E6594C181DD3A50039BDB5 /* zdelta-iosTests.xctest */;
++			productType = "com.apple.product-type.bundle.unit-test";
++		};
++/* End PBXNativeTarget section */
++
++/* Begin PBXProject section */
++		27BDA833181CF83400F27A11 /* Project object */ = {
++			isa = PBXProject;
++			attributes = {
++				CLASSPREFIX = ZD;
++				LastUpgradeCheck = 0500;
++				ORGANIZATIONNAME = "Jens Alfke";
++				TargetAttributes = {
++					27E65922181DA4690039BDB5 = {
++						TestTargetID = 27BDA83A181CF83400F27A11;
++					};
++				};
++			};
++			buildConfigurationList = 27BDA836181CF83400F27A11 /* Build configuration list for PBXProject "zdelta" */;
++			compatibilityVersion = "Xcode 3.2";
++			developmentRegion = English;
++			hasScannedForEncodings = 0;
++			knownRegions = (
++				en,
++			);
++			mainGroup = 27BDA832181CF83400F27A11;
++			productRefGroup = 27BDA83C181CF83400F27A11 /* Products */;
++			projectDirPath = "";
++			projectRoot = "";
++			targets = (
++				27BDA83A181CF83400F27A11 /* zdelta */,
++				27E65922181DA4690039BDB5 /* zdelta Tests */,
++				27E6593D181DD3A50039BDB5 /* zdelta-ios */,
++				27E6594B181DD3A50039BDB5 /* zdelta-iosTests */,
++				27BDA885181CFA4F00F27A11 /* zdc */,
++				27BDA893181CFA9300F27A11 /* zdu */,
++			);
++		};
++/* End PBXProject section */
++
++/* Begin PBXResourcesBuildPhase section */
++		27E65921181DA4690039BDB5 /* Resources */ = {
++			isa = PBXResourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E66A551A7017A40091DA3F /* README.md in Resources */,
++				27E66A4D1A7014230091DA3F /* README in Resources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27E6594A181DD3A50039BDB5 /* Resources */ = {
++			isa = PBXResourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E66A561A7017A60091DA3F /* README.md in Resources */,
++				27E66A4E1A7014230091DA3F /* README in Resources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXResourcesBuildPhase section */
++
++/* Begin PBXSourcesBuildPhase section */
++		27BDA837181CF83400F27A11 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E6591D181D8E400039BDB5 /* zdelta+blocks.c in Sources */,
++				27BDA866181CF95200F27A11 /* infblock.c in Sources */,
++				27BDA870181CF95200F27A11 /* infutil.c in Sources */,
++				271D183A1A9BEA0D001DDDB1 /* ZDCodec.m in Sources */,
++				27BDA874181CF95200F27A11 /* trees.c in Sources */,
++				27BDA863181CF95200F27A11 /* adler32.c in Sources */,
++				27BDA86A181CF95200F27A11 /* inffast.c in Sources */,
++				27BDA876181CF95200F27A11 /* zd_mem.c in Sources */,
++				27BDA86D181CF95200F27A11 /* inflate.c in Sources */,
++				27BDA8A4181CFBE400F27A11 /* NSData+zdelta.m in Sources */,
++				27BDA86E181CF95200F27A11 /* inftrees.c in Sources */,
++				27BDA868181CF95200F27A11 /* infcodes.c in Sources */,
++				27BDA87D181CF95200F27A11 /* zutil.c in Sources */,
++				27BDA87A181CF95200F27A11 /* zdelta.c in Sources */,
++				27BDA864181CF95200F27A11 /* deflate.c in Sources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27BDA882181CFA4F00F27A11 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27BDA891181CFA7600F27A11 /* zdc.c in Sources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27BDA896181CFA9300F27A11 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27BDA89F181CFA9F00F27A11 /* zdu.c in Sources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27E6591F181DA4690039BDB5 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E6592E181DA4690039BDB5 /* zdelta_Tests.m in Sources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27E6593A181DD3A50039BDB5 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E65968181DD4170039BDB5 /* inflate.c in Sources */,
++				27E65966181DD4170039BDB5 /* infcodes.c in Sources */,
++				27E65962181DD4170039BDB5 /* zdelta+blocks.c in Sources */,
++				27E6596B181DD4170039BDB5 /* trees.c in Sources */,
++				27E65969181DD4170039BDB5 /* inftrees.c in Sources */,
++				27E65964181DD4170039BDB5 /* deflate.c in Sources */,
++				27E65963181DD4170039BDB5 /* adler32.c in Sources */,
++				27E65965181DD4170039BDB5 /* infblock.c in Sources */,
++				27E66A541A7015F80091DA3F /* NSData+zdelta.m in Sources */,
++				27E6596C181DD4170039BDB5 /* zd_mem.c in Sources */,
++				27E6596D181DD4170039BDB5 /* zdelta.c in Sources */,
++				27E65967181DD4170039BDB5 /* inffast.c in Sources */,
++				27E6596A181DD4170039BDB5 /* infutil.c in Sources */,
++				27E6596E181DD4170039BDB5 /* zutil.c in Sources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		27E65948181DD3A50039BDB5 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++				27E65970181DD4C40039BDB5 /* zdelta_Tests.m in Sources */,
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXSourcesBuildPhase section */
++
++/* Begin PBXTargetDependency section */
++		27BDA890181CFA7000F27A11 /* PBXTargetDependency */ = {
++			isa = PBXTargetDependency;
++			target = 27BDA83A181CF83400F27A11 /* zdelta */;
++			targetProxy = 27BDA88F181CFA7000F27A11 /* PBXContainerItemProxy */;
++		};
++		27BDA894181CFA9300F27A11 /* PBXTargetDependency */ = {
++			isa = PBXTargetDependency;
++			target = 27BDA83A181CF83400F27A11 /* zdelta */;
++			targetProxy = 27BDA895181CFA9300F27A11 /* PBXContainerItemProxy */;
++		};
++		27E65931181DA4690039BDB5 /* PBXTargetDependency */ = {
++			isa = PBXTargetDependency;
++			target = 27BDA83A181CF83400F27A11 /* zdelta */;
++			targetProxy = 27E65930181DA4690039BDB5 /* PBXContainerItemProxy */;
++		};
++		27E65952181DD3A50039BDB5 /* PBXTargetDependency */ = {
++			isa = PBXTargetDependency;
++			target = 27E6593D181DD3A50039BDB5 /* zdelta-ios */;
++			targetProxy = 27E65951181DD3A50039BDB5 /* PBXContainerItemProxy */;
++		};
++/* End PBXTargetDependency section */
++
++/* Begin XCBuildConfiguration section */
++		27BDA83D181CF83400F27A11 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ALWAYS_SEARCH_USER_PATHS = NO;
++				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
++				CLANG_CXX_LIBRARY = "libc++";
++				CLANG_ENABLE_OBJC_ARC = YES;
++				CLANG_WARN_BOOL_CONVERSION = YES;
++				CLANG_WARN_CONSTANT_CONVERSION = YES;
++				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
++				CLANG_WARN_EMPTY_BODY = YES;
++				CLANG_WARN_ENUM_CONVERSION = YES;
++				CLANG_WARN_INT_CONVERSION = YES;
++				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
++				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
++				COPY_PHASE_STRIP = NO;
++				GCC_C_LANGUAGE_STANDARD = gnu99;
++				GCC_DYNAMIC_NO_PIC = NO;
++				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
++				GCC_OPTIMIZATION_LEVEL = 0;
++				GCC_PREPROCESSOR_DEFINITIONS = (
++					"DEBUG=1",
++					"$(inherited)",
++				);
++				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
++				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
++				GCC_WARN_64_TO_32_BIT_CONVERSION = NO;
++				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
++				GCC_WARN_UNDECLARED_SELECTOR = YES;
++				GCC_WARN_UNINITIALIZED_AUTOS = YES;
++				GCC_WARN_UNUSED_FUNCTION = YES;
++				GCC_WARN_UNUSED_VARIABLE = YES;
++				MACOSX_DEPLOYMENT_TARGET = 10.9;
++				ONLY_ACTIVE_ARCH = YES;
++				SDKROOT = macosx;
++			};
++			name = Debug;
++		};
++		27BDA83E181CF83400F27A11 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ALWAYS_SEARCH_USER_PATHS = NO;
++				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
++				CLANG_CXX_LIBRARY = "libc++";
++				CLANG_ENABLE_OBJC_ARC = YES;
++				CLANG_WARN_BOOL_CONVERSION = YES;
++				CLANG_WARN_CONSTANT_CONVERSION = YES;
++				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
++				CLANG_WARN_EMPTY_BODY = YES;
++				CLANG_WARN_ENUM_CONVERSION = YES;
++				CLANG_WARN_INT_CONVERSION = YES;
++				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
++				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
++				COPY_PHASE_STRIP = YES;
++				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
++				ENABLE_NS_ASSERTIONS = NO;
++				GCC_C_LANGUAGE_STANDARD = gnu99;
++				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
++				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
++				GCC_WARN_64_TO_32_BIT_CONVERSION = NO;
++				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
++				GCC_WARN_UNDECLARED_SELECTOR = YES;
++				GCC_WARN_UNINITIALIZED_AUTOS = YES;
++				GCC_WARN_UNUSED_FUNCTION = YES;
++				GCC_WARN_UNUSED_VARIABLE = YES;
++				MACOSX_DEPLOYMENT_TARGET = 10.9;
++				SDKROOT = macosx;
++			};
++			name = Release;
++		};
++		27BDA840181CF83400F27A11 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				EXECUTABLE_PREFIX = lib;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++			};
++			name = Debug;
++		};
++		27BDA841181CF83400F27A11 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				EXECUTABLE_PREFIX = lib;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++			};
++			name = Release;
++		};
++		27BDA88D181CFA4F00F27A11 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				GCC_PREPROCESSOR_DEFINITIONS = (
++					"DEBUG=1",
++					"$(inherited)",
++				);
++				PRODUCT_NAME = "$(TARGET_NAME)";
++			};
++			name = Debug;
++		};
++		27BDA88E181CFA4F00F27A11 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				PRODUCT_NAME = "$(TARGET_NAME)";
++			};
++			name = Release;
++		};
++		27BDA89C181CFA9300F27A11 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				GCC_PREPROCESSOR_DEFINITIONS = (
++					"DEBUG=1",
++					"$(inherited)",
++				);
++				PRODUCT_NAME = zdu;
++			};
++			name = Debug;
++		};
++		27BDA89D181CFA9300F27A11 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				PRODUCT_NAME = zdu;
++			};
++			name = Release;
++		};
++		27E65933181DA4690039BDB5 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				FRAMEWORK_SEARCH_PATHS = (
++					"$(DEVELOPER_FRAMEWORKS_DIR)",
++					"$(inherited)",
++				);
++				GCC_PRECOMPILE_PREFIX_HEADER = YES;
++				GCC_PREPROCESSOR_DEFINITIONS = (
++					"DEBUG=1",
++					"$(inherited)",
++				);
++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
++				INFOPLIST_FILE = "zdelta Tests/zdelta Tests-Info.plist";
++				OTHER_LDFLAGS = (
++					"$(inherited)",
++					"-framework",
++					XCTest,
++					"-ObjC",
++				);
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				WRAPPER_EXTENSION = xctest;
++			};
++			name = Debug;
++		};
++		27E65934181DA4690039BDB5 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				FRAMEWORK_SEARCH_PATHS = (
++					"$(DEVELOPER_FRAMEWORKS_DIR)",
++					"$(inherited)",
++				);
++				GCC_PRECOMPILE_PREFIX_HEADER = YES;
++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
++				INFOPLIST_FILE = "zdelta Tests/zdelta Tests-Info.plist";
++				OTHER_LDFLAGS = (
++					"$(inherited)",
++					"-framework",
++					XCTest,
++					"-ObjC",
++				);
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				WRAPPER_EXTENSION = xctest;
++			};
++			name = Release;
++		};
++		27E6595D181DD3A50039BDB5 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ARCHS = "$(ARCHS_STANDARD_INCLUDING_64_BIT)";
++				DSTROOT = /tmp/zdelta_ios.dst;
++				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
++				OTHER_LDFLAGS = "-ObjC";
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				SDKROOT = iphoneos;
++				SKIP_INSTALL = YES;
++			};
++			name = Debug;
++		};
++		27E6595E181DD3A50039BDB5 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ARCHS = "$(ARCHS_STANDARD_INCLUDING_64_BIT)";
++				DSTROOT = /tmp/zdelta_ios.dst;
++				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
++				OTHER_LDFLAGS = "-ObjC";
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				SDKROOT = iphoneos;
++				SKIP_INSTALL = YES;
++				VALIDATE_PRODUCT = YES;
++			};
++			name = Release;
++		};
++		27E65960181DD3A50039BDB5 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ARCHS = "$(ARCHS_STANDARD_INCLUDING_64_BIT)";
++				DEAD_CODE_STRIPPING = NO;
++				FRAMEWORK_SEARCH_PATHS = (
++					"$(SDKROOT)/Developer/Library/Frameworks",
++					"$(inherited)",
++					"$(DEVELOPER_FRAMEWORKS_DIR)",
++				);
++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
++				INFOPLIST_FILE = "zdelta Tests/zdelta Tests-Info.plist";
++				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
++				OTHER_LDFLAGS = (
++					"$(inherited)",
++					"-framework",
++					XCTest,
++					"-ObjC",
++				);
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				SDKROOT = iphoneos;
++				WRAPPER_EXTENSION = xctest;
++			};
++			name = Debug;
++		};
++		27E65961181DD3A50039BDB5 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ARCHS = "$(ARCHS_STANDARD_INCLUDING_64_BIT)";
++				DEAD_CODE_STRIPPING = NO;
++				FRAMEWORK_SEARCH_PATHS = (
++					"$(SDKROOT)/Developer/Library/Frameworks",
++					"$(inherited)",
++					"$(DEVELOPER_FRAMEWORKS_DIR)",
++				);
++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
++				INFOPLIST_FILE = "zdelta Tests/zdelta Tests-Info.plist";
++				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
++				OTHER_LDFLAGS = (
++					"$(inherited)",
++					"-framework",
++					XCTest,
++					"-ObjC",
++				);
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				SDKROOT = iphoneos;
++				VALIDATE_PRODUCT = YES;
++				WRAPPER_EXTENSION = xctest;
++			};
++			name = Release;
++		};
++/* End XCBuildConfiguration section */
++
++/* Begin XCConfigurationList section */
++		27BDA836181CF83400F27A11 /* Build configuration list for PBXProject "zdelta" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				27BDA83D181CF83400F27A11 /* Debug */,
++				27BDA83E181CF83400F27A11 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		27BDA83F181CF83400F27A11 /* Build configuration list for PBXNativeTarget "zdelta" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				27BDA840181CF83400F27A11 /* Debug */,
++				27BDA841181CF83400F27A11 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		27BDA88C181CFA4F00F27A11 /* Build configuration list for PBXNativeTarget "zdc" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				27BDA88D181CFA4F00F27A11 /* Debug */,
++				27BDA88E181CFA4F00F27A11 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		27BDA89B181CFA9300F27A11 /* Build configuration list for PBXNativeTarget "zdu" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				27BDA89C181CFA9300F27A11 /* Debug */,
++				27BDA89D181CFA9300F27A11 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		27E65932181DA4690039BDB5 /* Build configuration list for PBXNativeTarget "zdelta Tests" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				27E65933181DA4690039BDB5 /* Debug */,
++				27E65934181DA4690039BDB5 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		27E6595C181DD3A50039BDB5 /* Build configuration list for PBXNativeTarget "zdelta-ios" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				27E6595D181DD3A50039BDB5 /* Debug */,
++				27E6595E181DD3A50039BDB5 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		27E6595F181DD3A50039BDB5 /* Build configuration list for PBXNativeTarget "zdelta-iosTests" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				27E65960181DD3A50039BDB5 /* Debug */,
++				27E65961181DD3A50039BDB5 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++/* End XCConfigurationList section */
++	};
++	rootObject = 27BDA833181CF83400F27A11 /* Project object */;
++}
+diff -Naur -U 10 zdelta-2.1/Cocoa/zdelta.xcodeproj/project.xcworkspace/contents.xcworkspacedata zdelta-master/Cocoa/zdelta.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+--- zdelta-2.1/Cocoa/zdelta.xcodeproj/project.xcworkspace/contents.xcworkspacedata	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/Cocoa/zdelta.xcodeproj/project.xcworkspace/contents.xcworkspacedata	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<Workspace
++   version = "1.0">
++   <FileRef
++      location = "self:zdelta.xcodeproj">
++   </FileRef>
++</Workspace>
+diff -Naur -U 10 zdelta-2.1/deflate.c zdelta-master/deflate.c
+--- zdelta-2.1/deflate.c	2004-02-14 10:04:57.000000000 +1000
++++ zdelta-master/deflate.c	2015-03-04 08:56:42.000000000 +1000
+@@ -442,23 +442,23 @@
+   /* zdelta: reference data hash table */ 
+   s->ref_prev[0] = (Posf *)  ZALLOC(strm, s->w_size*(2*refnum), sizeof(Pos));  
+   s->ref_head[0] = (Posf *)  ZALLOC(strm, s->hash_size*(refnum), sizeof(Pos));
+ 
+   s->lit_bufsize = 1 << (memLevel + 6); /* 16K elements by default */
+ 
+   overlay = (ushf *) ZALLOC(strm, s->lit_bufsize, 2*sizeof(ush)+2);
+   s->pending_buf = (uchf *) overlay;
+   s->pending_buf_size = (ulg)s->lit_bufsize * (sizeof(ush)+2L);
+ 
+-  if (s->ref_window  == ZD_NULL || s->prev        == ZD_NULL ||
+-      s->head        == ZD_NULL || s->ref_prev    == ZD_NULL ||
+-      s->ref_head    == ZD_NULL || s->pending_buf == ZD_NULL)
++  if (s->ref_window[0] == ZD_NULL || s->prev        == ZD_NULL ||
++      s->head          == ZD_NULL || s->ref_prev[0] == ZD_NULL ||
++      s->ref_head[0]   == ZD_NULL || s->pending_buf == ZD_NULL)
+   {
+     strm->msg = (char*)ERR_MSG(ZD_MEM_ERROR);
+     zd_deflateEnd (strm);
+     return ZD_MEM_ERROR;
+   }
+ 
+   s->d_buf = overlay + s->lit_bufsize/sizeof(ush);
+   s->l_buf = s->d_buf + s->lit_bufsize;
+   s->z_buf = s->pending_buf + (1+2*sizeof(ush))*s->lit_bufsize;
+ 
+diff -Naur -U 10 zdelta-2.1/.gitignore zdelta-master/.gitignore
+--- zdelta-2.1/.gitignore	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/.gitignore	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,5 @@
++*.o
++*.a
++/zdc
++/zdu
++*.xccheckout
+diff -Naur -U 10 zdelta-2.1/infcodes.c zdelta-master/infcodes.c
+--- zdelta-2.1/infcodes.c	2003-10-27 10:30:09.000000000 +1000
++++ zdelta-master/infcodes.c	2015-03-04 08:56:42.000000000 +1000
+@@ -246,22 +246,26 @@
+     j = c->sub.code.need;
+     NEEDBITS(j)
+     t = c->sub.code.tree + ((uInt)b & inflate_mask[j]);
+     DUMPBITS(t->bits)
+     e = (uInt)(t->exop);
+     if (e == 0)         /* zdcode */
+     {
+       best_ptr = t->base;                /* get reference pointer */
+       c->rw    = best_ptr/2;
+       c->sign  = (c->len>>8) & ZD_MINUS; /* get the sign          */
+-      /* jump to the beginning of the match */  
+-      c->bp = rwptr[best_ptr] + (c->sign == ZD_PLUS ? c->dist : -c->dist); 
++      /* jump to the beginning of the match */
++      if (c->sign == ZD_PLUS) {
++        c->bp = rwptr[best_ptr] + c->dist;
++      } else {
++        c->bp = rwptr[best_ptr] - c->dist;
++      }
+       c->len  &= (REFMATCH-1);           /* normalize the length  */
+       if(c->dist > ZD_FAR){              /* updated base pointers */
+ 	if(s->stable[best_ptr])
+ 	  s->stable[best_ptr] = 0;
+ 	else
+ 	  rwptr[best_ptr] = c->bp + c->len;
+       }
+       else{
+ 	s->stable[best_ptr] = 1;
+ 	rwptr[best_ptr] = c->bp + c->len;
+diff -Naur -U 10 zdelta-2.1/inffast.c zdelta-master/inffast.c
+--- zdelta-2.1/inffast.c	2003-10-27 10:30:09.000000000 +1000
++++ zdelta-master/inffast.c	2015-03-04 08:56:42.000000000 +1000
+@@ -128,21 +128,25 @@
+ 	      
+ 	      GRABBITS(15)                  /* max bits for ZDELTA flag code */
+ 	      e = (t = tzd + ((uInt)b & mzd))->exop;
+ 	      do{
+ 		Assert(t->bits <= k, "dumping too many bits (zdelta)");
+ 		DUMPBITS(t->bits);
+ 		if(e == 0){
+ 		  best_ptr = (Byte)t->base;  /* get reference pointer      */
+ 
+ 		  /* jump to the beginning of the copy */
+-		  ptr = rwptr[best_ptr] + (sign == ZD_PLUS ? d : -d);   
++                  if(ZD_PLUS == sign) {
++                    ptr = rwptr[best_ptr] + d;
++                  } else {
++                    ptr = rwptr[best_ptr] - d;
++                  }
+ 
+ 		  /* do the copy */
+ 		  memcpy(q,z->base[best_ptr/2]+ptr,c);
+ 		  q += c;                    /* update pointers            */
+ 		  m -= c;   /* update the number of available output bytes */
+ 
+ 		  if(d > ZD_FAR){ 	     /* update reference pointers  */
+ 		    if(s->stable[best_ptr])
+ 		      s->stable[best_ptr] = 0;
+ 		    else
+diff -Naur -U 10 zdelta-2.1/README.md zdelta-master/README.md
+--- zdelta-2.1/README.md	1970-01-01 10:00:00.000000000 +1000
++++ zdelta-master/README.md	2015-03-04 08:56:42.000000000 +1000
+@@ -0,0 +1,61 @@
++# zdelta 2.1+
++
++This is a Git repository containing the source code of the official zdelta 2.1 release, and incorporating patches for bug fixes that have since been discovered. It also adds platform-specific wrapper APIs, for convenience; so far I've added one for Objective-C (supporting iOS and Mac OS X), but I'm open to submissions.
++
++## What is zdelta?
++
++Zdelta is a _delta-compression_ engine. Given two data blobs, a source and a target, it computes the differences between them and encodes that into an output blob called a _delta_. The delta isn't human-readable (and it should be treated as opaque by client programs), but the great thing about it is that it's usually much, much smaller than the target.
++
++What's great about that? Because you can perform the inverse operation, applying the delta to the source, to reconstitute the target. That means that, if you already have the source, then having the (small) delta is equivalent to having the (large) target. This has uses such as:
++
++* If two computers have the same source file, and it's then edited on one of them, the computer that did the editing can create a delta and send that to the other computer, which can apply it to its copy of the source, saving a lot of network bandwidth.
++* If a program wants to keep archival copies of older versions of data (for undo purposes or for backup) it can store each old version as a _reverse delta_ from the next newer version. Older versions can then be reconstituted by applying one or more of these reverse deltas in sequence to the current version. (This is in fact how all serious version control systems, from CVS to Git, store files in their repositories.)
++
++## History of zdelta
++
++From the [zdelta home page](http://cis.poly.edu/zdelta/):
++
++>zdelta is a general purpose lossless delta compression library developed at Polytechnic University. It is implemented by modifying the zlib 1.1.3 compression library (the modifications are marked in all of the original zlib 1.1.3 files). With its version 2.0, however, the library has significantly deviated from zlib, though it still uses a lot of the zlib code and structure. The zdelta algorithm was designed by Nasir Memon, Torsten Suel, and Dimitre Trendafilov, and implemented by Dimitre Trendafilov. The work on the library was supported by a grant from Intel Corporation. Torsten Suel was also supported by NSF CAREER Award NSF CCR-0093400.
++
++zdelta has been used in a number of programs, but is no longer under active development; the latest version, 2.1, dates from 2004. Since then a few bugs have been discovered and fixed, but there doesn't seem to be any central record of the bugs or the fixes, or any version-controlled repository to track. So I've created one.
++
++## How to build it
++
++### Cross-platform
++
++_From the comments in the Makefile:_
++
++To compile and test, type:
++
++    make test
++
++To compile the command line delta compressor, type:
++
++    make zdc 
++
++To compile the command line delta decompressor, type:
++
++    make zdu 
++
++For multiple reference file support compile with `REFNUM=N` option
++where `N` is the desired number (1..4) of reference files. The default
++value is 1.
++
++NOTE: The number of reference files comes at a price! Based on
++the selected number of reference files the compression may degrade, 
++and/or the memory usage may be increase. Do NOT add support for more 
++reference files than you need!!!
++
++To suppress the zdelta header and checksum compile with `-DNO_ERROR_CHECK`
++
++To install `/usr/local/lib/libzd.*`, `/usr/local/include/zdlib.h`, and
++`/usr/local/include/zdconf.h` type:
++
++    make install
++To install in $HOME instead of /usr/local, use:
++
++    make install prefix=$HOME
++
++### Mac OS and iOS
++
++There is an Xcode project in the `Cocoa` subdirectory. Its `xdelta` target produces a static library for 64-bit Mac OS that includes the core xdelta as well as some Objective-C wrappers (a category on NSData.) There is also an `xdelta-iOS` target for building an iOS static library.
+diff -Naur -U 10 zdelta-2.1/zdlib.h zdelta-master/zdlib.h
+--- zdelta-2.1/zdlib.h	2004-02-21 08:11:15.000000000 +1000
++++ zdelta-master/zdlib.h	2015-03-04 08:56:42.000000000 +1000
+@@ -59,21 +59,21 @@
+ #define ZD_BUF_ERROR    (-5)
+ #define ZD_VERSION_ERROR (-6)
+ 
+ #ifndef REFNUM
+ #define REFNUM 1            /* Reference Window Number */
+ #endif
+ #if REFNUM < 1 || REFNUM > 4
+ #error: incorrect REFNUM value 
+ #endif 
+ 
+-#define ZDLIB_VERSION "2.1"
++#define ZDLIB_VERSION "2.1.1"
+ /* current libzd version */
+ 
+ /* 
+      The 'libzd' compression library provides in-memory compression and
+   decompression functions, including integrity checks of the uncompressed
+   data.  This version of the library supports only one compression method
+   (delta_deflation) 
+   NOTE: 'libzd' complies with the ZLIB Compressed Data Format Specification
+ 
+      Compression can be done in a single step if the buffers are large

@@ -1,0 +1,17 @@
+name       : minibsdiff
+version    : 4.3
+release    : 1
+source     :
+    - http://www.daemonology.net/bsdiff/bsdiff-4.3.tar.gz : 18821588b2dc5bf159aa37d3bcb7b885d85ffd1e19f23a0c57a58723fea85f48
+license    : BSD-2-clause
+component  : system.utils
+summary    : bsdiff and bspatch are tools for building and applying patches to binary files.
+description: |
+    bsdiff and bspatch are tools for building and applying patches to binary files. By using suffix sorting (specifically, Larsson and Sadakane's qsufsort) and taking advantage of how executable files change, bsdiff routinely produces binary patches 50-80% smaller than those produced by Xdelta, and 15% smaller than those produced by .RTPatch (a commercial patch tool).
+    This is a fork by user "thoughtpolice" on Github.
+setup      : |
+    %patch -p1 < $pkgfiles/minibsdiff.patch
+build      : |
+    %make
+install    : |
+    %make_install PREFIX=/usr INSTALL_LIB=$installdir/%libdir%

@@ -1,0 +1,34 @@
+<PISI>
+    <Source>
+        <Name>packmp3</Name>
+        <Packager>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Packager>
+        <License>LGPL-3.0</License>
+        <PartOf>multimedia.audio</PartOf>
+        <Summary xml:lang="en">packMP3 is a compression program for MP3 files.</Summary>
+        <Description xml:lang="en">packMP3 is a compression program specially designed for further compression of MPEG-1 Audio Layer III audio files without causing any further loss. Typically it reduces the file size of a MP3 file by 16% based on tests with 6000 randomly selected files.
+</Description>
+        <Archive type="binary" sha1sum="79eb0752a961b8e0d15c77d298c97498fbc89c5a">https://solus-project.com/sources/README.Solus</Archive>
+    </Source>
+    <Package>
+        <Name>packmp3</Name>
+        <Summary xml:lang="en">packMP3 is a compression program for MP3 files.</Summary>
+        <Description xml:lang="en">packMP3 is a compression program specially designed for further compression of MPEG-1 Audio Layer III audio files without causing any further loss. Typically it reduces the file size of a MP3 file by 16% based on tests with 6000 randomly selected files.
+</Description>
+        <PartOf>multimedia.audio</PartOf>
+        <Files>
+            <Path fileType="executable">/usr/bin</Path>
+        </Files>
+    </Package>
+    <History>
+        <Update release="1">
+            <Date>2016-11-23</Date>
+            <Version>1.0g</Version>
+            <Comment>Packaging update</Comment>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Update>
+    </History>
+</PISI>

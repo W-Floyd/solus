@@ -1,0 +1,13 @@
+name       : macos-theme
+version    : 0.9
+release    : 1
+source     :
+    - https://github.com/B00merang-Project/macOS-Sierra/archive/v0.9.tar.gz : 4d2fa5aa5e31e5d0fe1593b3aac089d8f2968738896fb87835d3049e4e76eac7
+license    : GPL-2.0 # CHECK ME
+component  : PLEASE FILL ME IN
+summary    : PLEASE FILL ME IN
+description: |
+    PLEASE FILL ME IN
+install    : |
+    mkdir -p %installroot%/usr/share/themes/macOS-Sierra
+    cp -r ./ %installroot%/usr/share/themes/macOS-Sierra

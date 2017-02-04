@@ -1,0 +1,16 @@
+name       : shc
+version    : 3.9.3
+release    : 1
+source     :
+    - https://github.com/neurobin/shc/archive/3.9.3.tar.gz : b7120f66177a35af7dc42763a55e7ade3a80043c0188739e57bcc648a5ac4bb3
+license    : GPL-3.0
+component  : programming.tools
+summary    : shc is a generic shell script compiler,
+description: |
+    A generic shell script compiler. Shc takes a script, which is specified on the command line and produces C source code. The generated source code is then compiled and linked to produce a stripped binary executable.
+setup      : |
+    %configure
+build      : |
+    %make
+install    : |
+    %make_install

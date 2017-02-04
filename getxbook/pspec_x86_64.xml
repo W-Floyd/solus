@@ -1,0 +1,40 @@
+<PISI>
+    <Source>
+        <Name>getxbook</Name>
+        <Packager>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Packager>
+        <License>ISC</License>
+        <PartOf>office.viewers</PartOf>
+        <Summary xml:lang="en">getxbook is a collection of tools to download books from Google Books, Amazon and Barnes &amp; Noble.</Summary>
+        <Description xml:lang="en">getxbook is a collection of tools to download books from Google Books&apos; &quot;Book Preview&quot; (getgbook), Amazon&apos;s &quot;Look Inside the Book&quot; (getabook) and Barnes &amp; Noble&apos;s &quot;Book Viewer&quot; (getbnbook).
+</Description>
+        <Archive type="binary" sha1sum="79eb0752a961b8e0d15c77d298c97498fbc89c5a">https://solus-project.com/sources/README.Solus</Archive>
+    </Source>
+    <Package>
+        <Name>getxbook</Name>
+        <Summary xml:lang="en">getxbook is a collection of tools to download books from Google Books, Amazon and Barnes &amp; Noble.</Summary>
+        <Description xml:lang="en">getxbook is a collection of tools to download books from Google Books&apos; &quot;Book Preview&quot; (getgbook), Amazon&apos;s &quot;Look Inside the Book&quot; (getabook) and Barnes &amp; Noble&apos;s &quot;Book Viewer&quot; (getbnbook).
+</Description>
+        <PartOf>office.viewers</PartOf>
+        <Files>
+            <Path fileType="executable">/usr/bin</Path>
+            <Path fileType="man">/usr/share/man</Path>
+            <Path fileType="data">/usr/share/pixmaps/getabook.gif</Path>
+            <Path fileType="data">/usr/share/pixmaps/getbnbook.gif</Path>
+            <Path fileType="data">/usr/share/pixmaps/getgbook.gif</Path>
+            <Path fileType="data">/usr/share/pixmaps/getxbook.png</Path>
+            <Path fileType="data">/usr/share/pixmaps/getxbook.xpm</Path>
+        </Files>
+    </Package>
+    <History>
+        <Update release="1">
+            <Date>2017-01-07</Date>
+            <Version>1.2</Version>
+            <Comment>Packaging update</Comment>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Update>
+    </History>
+</PISI>

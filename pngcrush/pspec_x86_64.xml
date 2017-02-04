@@ -1,0 +1,34 @@
+<PISI>
+    <Source>
+        <Name>pngcrush</Name>
+        <Packager>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Packager>
+        <License>Libpng</License>
+        <PartOf>system.utils</PartOf>
+        <Summary xml:lang="en">Tool for optimizing the compression of PNG files.</Summary>
+        <Description xml:lang="en">pngcrush is a free and open source command-line utility for optimizing PNG image files. It reduces the size of the file losslessly – that is, the resulting &quot;crushed&quot; image will have the same quality as the source image.
+</Description>
+        <Archive type="binary" sha1sum="79eb0752a961b8e0d15c77d298c97498fbc89c5a">https://solus-project.com/sources/README.Solus</Archive>
+    </Source>
+    <Package>
+        <Name>pngcrush</Name>
+        <Summary xml:lang="en">Tool for optimizing the compression of PNG files.</Summary>
+        <Description xml:lang="en">pngcrush is a free and open source command-line utility for optimizing PNG image files. It reduces the size of the file losslessly – that is, the resulting &quot;crushed&quot; image will have the same quality as the source image.
+</Description>
+        <PartOf>system.utils</PartOf>
+        <Files>
+            <Path fileType="executable">/usr/bin</Path>
+        </Files>
+    </Package>
+    <History>
+        <Update release="1">
+            <Date>2016-11-19</Date>
+            <Version>1.8.10</Version>
+            <Comment>Packaging update</Comment>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Update>
+    </History>
+</PISI>

@@ -1,0 +1,17 @@
+name       : zdelta
+version    : 2.1
+release    : 1
+source     :
+    - http://cis.poly.edu/zdelta/downloads/zdelta-2.1.tar.gz : 5a240a5b126420d23044171d8ae54b3038aea50f203ac89738466f1c36b98858
+license    : Zlib
+component  : system.utils
+summary    : zdelta is a general purpose delta compression library.
+description: |
+    zdelta is a general purpose delta compression library. It is implemented by modifying zlib source code . The modifications are marked in all original zlib source files. All the code is thread safe. The data format used by the libzd library is identical to zlib one.
+setup      : |
+    %patch -p1 < $pkgfiles/zdelta-fixes.patch
+    %patch -p0 < $pkgfiles/makefile.patch
+build      : |
+    %make all
+install    : |
+    %make_install prefix=$installdir/usr libdir=%libdir%
