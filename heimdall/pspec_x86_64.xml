@@ -1,0 +1,34 @@
+<PISI>
+    <Source>
+        <Name>heimdall</Name>
+        <Packager>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Packager>
+        <License>MIT</License>
+        <PartOf>system.utils</PartOf>
+        <Summary xml:lang="en">Heimdall is a tool suite used to flash firmware onto Samsung Galaxy S devices.</Summary>
+        <Description xml:lang="en">Heimdall is a cross-platform open-source tool suite used to flash firmware (aka ROMs) onto Samsung Galaxy S devices.
+</Description>
+        <Archive type="binary" sha1sum="79eb0752a961b8e0d15c77d298c97498fbc89c5a">https://solus-project.com/sources/README.Solus</Archive>
+    </Source>
+    <Package>
+        <Name>heimdall</Name>
+        <Summary xml:lang="en">Heimdall is a tool suite used to flash firmware onto Samsung Galaxy S devices.</Summary>
+        <Description xml:lang="en">Heimdall is a cross-platform open-source tool suite used to flash firmware (aka ROMs) onto Samsung Galaxy S devices.
+</Description>
+        <PartOf>system.utils</PartOf>
+        <Files>
+            <Path fileType="executable">/usr/bin</Path>
+        </Files>
+    </Package>
+    <History>
+        <Update release="1">
+            <Date>2017-02-04</Date>
+            <Version>2016.07.20</Version>
+            <Comment>Packaging update</Comment>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Update>
+    </History>
+</PISI>

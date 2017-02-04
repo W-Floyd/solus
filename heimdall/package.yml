@@ -1,0 +1,28 @@
+name       : heimdall
+version    : 2016.07.20
+release    : 1
+source     :
+    - git|https://github.com/Benjamin-Dobell/Heimdall.git : b6fe7f8535355eb8025f4872efef6cd7d3993db6
+license    : MIT
+component  : system.utils
+summary    : Heimdall is a tool suite used to flash firmware onto Samsung Galaxy S devices.
+description: |
+    Heimdall is a cross-platform open-source tool suite used to flash firmware (aka ROMs) onto Samsung Galaxy S devices.
+builddeps  :
+    - pkgconfig(libusb-1.0)
+    - pkgconfig(Qt5Widgets)
+    - pkgconfig(glu)
+setup      : |
+    mkdir build
+    pushd build
+    %cmake ..
+    popd
+build      : |
+    pushd build
+    %make
+    popd
+install    : |
+    pushd build/bin
+    install -Dm00755 heimdall $installdir/usr/bin/heimdall
+    install -Dm00755 heimdall-frontend $installdir/usr/bin/heimdall-frontend
+    popd
