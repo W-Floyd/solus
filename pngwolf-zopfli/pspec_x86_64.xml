@@ -1,0 +1,38 @@
+<PISI>
+    <Source>
+        <Name>pngwolf-zopfli</Name>
+        <Packager>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Packager>
+        <License>GPL-3.0</License>
+        <PartOf>system.utils</PartOf>
+        <Summary xml:lang="en">pngwolf is a tool to minimize the size of PNG image files.</Summary>
+        <Description xml:lang="en">pngwolf-zopfli is a version of pngwolf that uses Zopfli for the final compression step.
+
+pngwolf is a tool to minimize the size of PNG image files. There are a number of factors that affect the size of PNG image files, such as the number of colors in the image and whether the image data is stored as RGBA data or in the form of references to a color palette. The main factor is the quality of the Deflate compression used to compress the image data, which is in turn affected by the quality of the compressor and how well the data to be compressed is arranged.
+</Description>
+        <Archive type="binary" sha1sum="79eb0752a961b8e0d15c77d298c97498fbc89c5a">https://solus-project.com/sources/README.Solus</Archive>
+    </Source>
+    <Package>
+        <Name>pngwolf-zopfli</Name>
+        <Summary xml:lang="en">pngwolf is a tool to minimize the size of PNG image files.</Summary>
+        <Description xml:lang="en">pngwolf-zopfli is a version of pngwolf that uses Zopfli for the final compression step.
+
+pngwolf is a tool to minimize the size of PNG image files. There are a number of factors that affect the size of PNG image files, such as the number of colors in the image and whether the image data is stored as RGBA data or in the form of references to a color palette. The main factor is the quality of the Deflate compression used to compress the image data, which is in turn affected by the quality of the compressor and how well the data to be compressed is arranged.
+</Description>
+        <PartOf>system.utils</PartOf>
+        <Files>
+            <Path fileType="executable">/usr/bin</Path>
+        </Files>
+    </Package>
+    <History>
+        <Update release="1">
+            <Date>2016-12-10</Date>
+            <Version>1.1.1</Version>
+            <Comment>Packaging update</Comment>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Update>
+    </History>
+</PISI>

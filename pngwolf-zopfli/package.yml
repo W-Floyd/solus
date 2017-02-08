@@ -1,0 +1,17 @@
+name       : pngwolf-zopfli
+version    : 1.1.1
+release    : 1
+source     :
+    - git|https://github.com/jibsen/pngwolf-zopfli.git : v1.1.1
+license    : GPL-3.0
+component  : system.utils
+summary    : pngwolf is a tool to minimize the size of PNG image files.
+description: |
+    pngwolf-zopfli is a version of pngwolf that uses Zopfli for the final compression step.
+
+    pngwolf is a tool to minimize the size of PNG image files. There are a number of factors that affect the size of PNG image files, such as the number of colors in the image and whether the image data is stored as RGBA data or in the form of references to a color palette. The main factor is the quality of the Deflate compression used to compress the image data, which is in turn affected by the quality of the compressor and how well the data to be compressed is arranged.
+build      : |
+    %cmake
+    %make
+install    : |
+    install -Dm00755 pngwolf $installdir/usr/bin/pngwolf
