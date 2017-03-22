@@ -1,2 +1,4 @@
 */.git/*
 common
+Makefile.common
+Makefile.iso
