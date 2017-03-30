@@ -1,0 +1,16 @@
+name       : guetzli
+version    : 1.0.1
+release    : 1
+source     :
+    - https://github.com/google/guetzli/archive/v1.0.1.tar.gz : e52eb417a5c0fb5a3b08a858c8d10fa797627ada5373e203c196162d6a313697
+license    : GPL-2.0 # CHECK ME
+component  : PLEASE FILL ME IN
+summary    : PLEASE FILL ME IN
+description: |
+    PLEASE FILL ME IN
+builddeps  :
+    - pkgconfig(libpng)
+build      : |
+    %make
+install    : |
+    install -Dm00755 ./bin/Release/guetzli $installdir/usr/bin/guetzli
