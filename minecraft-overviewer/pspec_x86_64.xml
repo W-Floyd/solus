@@ -1,0 +1,131 @@
+<PISI>
+    <Source>
+        <Name>minecraft-overviewer</Name>
+        <Packager>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Packager>
+        <License>GPL-3.0</License>
+        <PartOf>multimedia.graphics</PartOf>
+        <Summary xml:lang="en">A high-resolution Minecraft world renderer with a Google Maps interface</Summary>
+        <Description xml:lang="en">The Minecraft Overviewer is a command-line tool for rendering high-resolution maps of Minecraft worlds. It generates a set of static html and image files and uses the Google Maps API to display a nice interactive map.
+</Description>
+        <Archive type="binary" sha1sum="79eb0752a961b8e0d15c77d298c97498fbc89c5a">https://solus-project.com/sources/README.Solus</Archive>
+    </Source>
+    <Package>
+        <Name>minecraft-overviewer</Name>
+        <Summary xml:lang="en">A high-resolution Minecraft world renderer with a Google Maps interface</Summary>
+        <Description xml:lang="en">The Minecraft Overviewer is a command-line tool for rendering high-resolution maps of Minecraft worlds. It generates a set of static html and image files and uses the Google Maps API to display a nice interactive map.
+</Description>
+        <PartOf>multimedia.graphics</PartOf>
+        <Files>
+            <Path fileType="executable">/usr/bin</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/Minecraft_Overviewer-0.12.184-py2.7.egg-info</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/__init__.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/__init__.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/assetmanager.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/assetmanager.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/aux_files/__init__.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/aux_files/__init__.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/aux_files/genPOI.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/aux_files/genPOI.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/c_overviewer.so</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/cache.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/cache.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/configParser.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/configParser.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/js_src/models.js</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/js_src/overviewer.js</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/js_src/util.js</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/js_src/views.js</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/chest.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/ender.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/fire.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/foliage.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/grass.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/lava.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/light_normal.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/normal_double.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/portal.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/water.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/textures/watercolor.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/backbone.js</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/bed.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/compass_lower-left.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/compass_lower-right.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/compass_upper-left.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/compass_upper-right.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/control-bg-active.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/control-bg.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_anvil.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_anvil_red.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_base_plain.svg</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_base_plain_red.svg</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_factory.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_factory_red.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_hoe.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_hoe_red.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_mine.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_mine_red.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_ship.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_ship_red.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_tower.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_tower_red.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_town.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/icons/marker_town_red.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/index.html</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/overviewer.css</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/regions.js</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/signpost-shadow.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/signpost.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/signpost_icon.png</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/data/web_assets/underscore.js</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/dispatcher.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/dispatcher.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/files.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/files.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/items.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/items.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/logger.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/logger.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/nbt.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/nbt.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/observer.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/observer.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/optimizeimages.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/optimizeimages.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/overviewer_version.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/overviewer_version.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/progressbar.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/progressbar.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/rcon.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/rcon.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/rendermodes.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/rendermodes.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/settingsDefinition.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/settingsDefinition.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/settingsValidators.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/settingsValidators.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/signals.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/signals.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/textures.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/textures.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/tileset.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/tileset.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/util.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/util.pyc</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/world.py</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/world.pyc</Path>
+            <Path fileType="doc">/usr/share/doc</Path>
+        </Files>
+    </Package>
+    <History>
+        <Update release="3">
+            <Date>2017-04-06</Date>
+            <Version>0.12.184</Version>
+            <Comment>Packaging update</Comment>
+            <Name>William Floyd</Name>
+            <Email>william.png2000@gmail.com</Email>
+        </Update>
+    </History>
+</PISI>

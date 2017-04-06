@@ -1,0 +1,18 @@
+name       : minecraft-overviewer
+version    : 0.12.184
+release    : 3
+source     :
+    - http://overviewer.org/builds/src/33/overviewer-0.12.184.tar.gz : afa0d6a393484942b629836107452d88a8735722d8f376bd0df59a5816b960bb
+license    : GPL-3.0
+component  : multimedia.graphics
+summary    : A high-resolution Minecraft world renderer with a Google Maps interface
+description: |
+    The Minecraft Overviewer is a command-line tool for rendering high-resolution maps of Minecraft worlds. It generates a set of static html and image files and uses the Google Maps API to display a nice interactive map.
+builddeps  :
+    - numpy
+    - python-pillow-devel
+    - libpillowfight-devel
+build      : |
+    %python_setup
+install    : |
+    %python_install
