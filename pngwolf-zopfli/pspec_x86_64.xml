@@ -27,9 +27,9 @@ pngwolf is a tool to minimize the size of PNG image files. There are a number of
         </Files>
     </Package>
     <History>
-        <Update release="1">
-            <Date>2016-12-10</Date>
-            <Version>1.1.1</Version>
+        <Update release="2">
+            <Date>2017-04-06</Date>
+            <Version>1.1.2</Version>
             <Comment>Packaging update</Comment>
             <Name>William Floyd</Name>
             <Email>william.png2000@gmail.com</Email>
