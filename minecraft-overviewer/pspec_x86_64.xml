@@ -20,7 +20,7 @@
         <PartOf>multimedia.graphics</PartOf>
         <Files>
             <Path fileType="executable">/usr/bin</Path>
-            <Path fileType="library">/usr/lib/python2.7/site-packages/Minecraft_Overviewer-0.12.184-py2.7.egg-info</Path>
+            <Path fileType="library">/usr/lib/python2.7/site-packages/Minecraft_Overviewer-0.12.187-py2.7.egg-info</Path>
             <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/__init__.py</Path>
             <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/__init__.pyc</Path>
             <Path fileType="library">/usr/lib/python2.7/site-packages/overviewer_core/assetmanager.py</Path>
@@ -120,9 +120,9 @@
         </Files>
     </Package>
     <History>
-        <Update release="3">
-            <Date>2017-04-06</Date>
-            <Version>0.12.184</Version>
+        <Update release="4">
+            <Date>2017-05-31</Date>
+            <Version>0.12.187</Version>
             <Comment>Packaging update</Comment>
             <Name>William Floyd</Name>
             <Email>william.png2000@gmail.com</Email>
