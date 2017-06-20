@@ -1,8 +1,8 @@
 name       : minecraft-overviewer
-version    : 0.12.196
-release    : 5
+version    : 0.12.198
+release    : 6
 source     :
-    - http://overviewer.org/builds/src/39/overviewer-0.12.196.tar.gz : ac92d0ed1ac3d512f6063a358ff016fdfb51b663756cfd645c1eca6d4a57109e
+    - http://overviewer.org/builds/src/41/overviewer-0.12.198.tar.gz : a5134d414a8ffa83c23379c1b2f54ca2e42d0172fddbfcdd8991747a077c97c3
 license    : GPL-3.0
 component  : multimedia.graphics
 summary    : A high-resolution Minecraft world renderer with a Google Maps interface
