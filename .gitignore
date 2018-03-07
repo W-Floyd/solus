@@ -2,3 +2,4 @@
 common
 Makefile.common
 Makefile.iso
+*.eopkg
